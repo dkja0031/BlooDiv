@@ -1,0 +1,354 @@
+---
+title: "Blood-based biomarkers in the wild"
+author: "Daniel Kjærgaard"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, message = FALSE) 
+```
+
+# **BlooDiv: Blood-Based Biomarkers**
+
+### Read csv 
+```{r}
+d <- read.csv("FILE_PATH", sep = ";")
+d_redcap <- subset(d, redcap_event_name == "t0_arm_1")
+```
+
+### Open packages
+```{r, results=FALSE, messages = FALSE, warning=FALSE}
+library(arsenal)
+library(forcats)
+library(tidyr)
+library(ggplot2)
+library(ggsignif)
+library(dplyr)
+```
+
+### Impute DDBBno, CSF_raw and amyloidPET_suvr
+```{r, warning=FALSE}
+to_impute <- read.csv("FILE_PATH", sep = ";")
+to_impute_selected <- to_impute %>% select(record_id, DDBBno, ab42_raw, ptau181_raw, ttau_raw, Amyloid_pet_SUVR, 
+                                           ab4240_raw, csf_ab4240, Swedish_ttau_cutoff, Swedish_ab42_cutoff, Swedish_ptau181_cutoff, Swedish_ab4240_cutoff)
+d1 <- left_join(d_redcap, to_impute_selected, by = "record_id")
+rm(d, d_redcap, to_impute, to_impute_selected) 
+```
+
+
+### Clean-up dataframe
+```{r, warning=FALSE}
+d1$sex <- as.factor(d1$sex)
+  levels(d1$sex) <- c("female", "male")
+  
+d1$minority_majority <- as.factor(d1$minority_majority)
+  levels(d1$minority_majority) <- c("Majority", "Minority")
+
+d1$country_of_origin <- as.factor(d1$country_of_origin)
+  d1$country_of_origin <- fct_collapse(d1$country_of_origin, Morocco = c("Marocco", "Morrocco"))
+  d1$country_of_origin <- fct_collapse(d1$country_of_origin, Palestine = c("Palistinia", "Morrocco"))
+  d1$country_of_origin <- fct_collapse(d1$country_of_origin, Tunisia = c("Tunisia", "Tunesia"))
+  d1$country_of_origin <- fct_collapse(d1$country_of_origin, Yugoslavia = c("Yugoslavia", "ExYugoslavia"))
+  d1$geographic_region <- d1$country_of_origin
+  d1$geographic_region <- fct_collapse(d1$geographic_region, Denmark_Sweden = c("DK", "SWE"))
+  d1$geographic_region <- fct_collapse(d1$geographic_region, Geographic_middle_east = c("Turkey", "Iraq", "Iran", "Afghanistan",
+                                                                                "Azerbaijan", "Armenia", "Turkmenistan",
+                                                                                "Pakistan", "Syria", "Israel", "Lebanon",
+                                                                                "Palestine", "Qatar", "Yemen", "Cyprus", "Georgia"))
+  d1$geographic_region <- fct_collapse(d1$geographic_region, Geographic_europe = c("Albania", "Andorra", "Austria", "Belarus", 
+                                                          "Belgium", "Bosnia", "Bulgaria", 
+                                                          "Croatia", "Cyprus", "Czech Republic", "Czechoslovakia", 
+                                                          "Estonia", "Finland", "France", "Germany", "Greece", 
+                                                          "Hungary", "Iceland", "Ireland", "Italy", "Kosovo", 
+                                                          "Latvia", "Liechtenstein", "Lithuania", "Luxembourg", 
+                                                          "Malta", "Moldova", "Monaco", "Montenegro", 
+                                                          "Netherlands", "North Macedonia", "Norway", 
+                                                          "Poland", "Portugal", "Romania", "Russia", 
+                                                          "San Marino", "Serbia", "Slovakia", "Slovenia", 
+                                                          "Spain", "Switzerland", "Turkey", "Ukraine", 
+                                                          "United Kingdom", "Vatican City", "England", "ExYugoslavia",
+                                                          "Faroe", "Greenland", "Macedonia", "Yugoslavia"))
+  d1$geographic_region <- fct_collapse(d1$geographic_region, Geographic_Africa = c("Algeria", "Angola", "Benin", "Botswana", 
+                                                                                   "Burkina Faso", 
+                                                          "Burundi", "Cabo Verde", "Cameroon", "Central African Republic", 
+                                                          "Chad", "Comoros", "Democratic Republic of the Congo", 
+                                                          "Republic of the Congo", "Djibouti", "Egypt", 
+                                                          "Equatorial Guinea", "Eritrea", "Eswatini", "Ethiopia", 
+                                                          "Gabon", "Gambia", "Ghana", "Guinea", "Guinea-Bissau", 
+                                                          "Ivory Coast", "Kenya", "Lesotho", "Liberia", "Libya", 
+                                                          "Madagascar", "Malawi", "Mali", "Mauritania", "Mauritius", 
+                                                          "Morocco", "Mozambique", "Namibia", "Niger", "Nigeria", 
+                                                          "Rwanda", "Sao Tome and Principe", "Senegal", "Seychelles", 
+                                                          "Sierra Leone", "Somalia", "SouthAfrica", "South Sudan", 
+                                                          "Sudan", "Tanzania", "Togo", "Tunisia", "Uganda", 
+                                                          "Zambia", "Zimbabwe"))
+
+excluded_countries <- c("Argentina", "Australia", "Barbados", "Bolivia", "Brazil", "CentralAmerica", "Chile", "China", "Colombia", "Cuba", "ElSalvador", "India", "Indonesia", "Jamaica", "Japan", "Korea", "Malaysia", "Mexico", "NewZealand", "PapuaNewGuinea", "Philippines", "SriLanka", "Taiwan", "Thailand", "Trinidad", "Uruguay", "USA", "Vietnam")
+ d1$geographic_region <- as.factor(ifelse(d1$geographic_region %in% excluded_countries, NA, as.character(d1$geographic_region)))
+  
+  d1$geographic_region <- relevel(d1$geographic_region, ref = "Denmark_Sweden")   
+  
+d1$primary_language <- as.factor(d1$primary_language)
+
+d1$interpreter <- as.factor(d1$interpreter)
+  levels(d1$interpreter) <- c("Yes", "No")
+  
+d1$interpreter_type <- as.factor(d1$interpreter_type)
+  levels(d1$interpreter_type) <- c("Professional", "Informal")
+  
+d1$cognitive_status <- as.factor(d1$cognitive_status)
+  levels(d1$cognitive_status) <- c("NCI", "MCI", "Mild dementia", "moderate dementia", "severe dementia", "mild-severe psychiatric", "undecided", "SCD")
+  d1$cognitive_status <- fct_collapse(d1$cognitive_status, SCD = c("NCI", "SCD"))
+  d1$cognitive_status <- fct_collapse(d1$cognitive_status, MCI = c("MCI", "mild-severe psychiatric"))
+  d1$cognitive_status <- droplevels(d1$cognitive_status)
+  
+d1$dementia_type <- as.factor(d1$dementia_type)
+  levels(d1$dementia_type) <- c("AD", "VaD", "DLB", "Alcohol", "NPH", "bvFTD", "SD", "nfPPA", "PD", "aPD", "Other", "NCI", "mix", "Affective")
+  
+d1$unknown <- as.factor(d1$dementia_other_description == "Unknown")
+  levels(d1$unknown) <- c("Specified", "Unspecified")
+  
+
+d1["mce_total"][d1["mce_total"] == 0] <- NA
+
+d1$diabetes <- ifelse(d1$diabetes == 2, 0, 1)
+d1$hypertension <- ifelse(d1$hypertension == 2, 0, 1)
+d1$hyperchol <- ifelse(d1$hyperchol == 2, 0, 1) 
+d1$stroke <- ifelse(d1$stroke == 2, 0, 1) 
+d1$thyroid_disease <- ifelse(d1$thyroid_kidney_liver_disease == 2, 0, 1)
+  d1 <- subset(d1, select=-(thyroid_kidney_liver_disease))
+d1$kidney_disease <- ifelse(d1$kidney_disease == 2, 0, 1)
+d1$liver_disease <- ifelse(d1$liver_disease == 2, 0, 1)
+d1$ihd <- ifelse(d1$ihd == 2, 0, 1)
+d1$afli <- ifelse(d1$afli == 2, 0, 1) 
+d1$depression <- ifelse(d1$depression == 2, 0, 1) 
+d1$neuropathy <- ifelse(d1$neuropathy == 2, 0, 1) 
+d1$head_trauma <- ifelse(d1$head_trauma == 2, 0, 1) 
+d1$sleep_disorder <- ifelse(d1$sleep_disorder == 2, 0, 1)
+
+d1$csf_ab42 <- as.factor(d1$csf_ab42)
+  levels(d1$csf_ab42) <- c("normal", "abnormal")
+d1$csf_ptau181 <- as.factor(d1$csf_ptau181)
+  levels(d1$csf_ptau181) <- c("normal", "abnormal")
+d1$csf_ttau <- as.factor(d1$csf_ttau)
+  levels(d1$csf_ttau) <- c("normal", "abnormal")
+d1$amyloid_pet <- as.factor(d1$amyloid_pet)
+  levels(d1$amyloid_pet) <- c("normal", "abnormal")
+d1$fazeka <- as.factor(d1$fazeka)
+d1$mta <- as.factor(d1$mta)
+d1$gca <- as.factor(d1$gca)
+
+d1$dementia_AD_non_AD <- d1$dementia_type
+d1$dementia_other_description <- as.factor(d1$dementia_other_description)
+  d1$dementia_AD_non_AD <- fct_collapse(d1$dementia_AD_non_AD, AD_and_mixed = c(
+    "AD", "mix"))
+  d1$dementia_AD_non_AD <- fct_collapse(d1$dementia_AD_non_AD, Non_AD = c(
+    "VaD", "DLB", "Alcohol", "NPH", "bvFTD", "SD", "nfPPA", "PD", "aPD"))
+  d1$dementia_AD_non_AD <- fct_collapse(d1$dementia_AD_non_AD, Non_neurological = c(
+    "NCI", "Affective"))
+  levels(d1$dementia_AD_non_AD) <- c("AD_and_mixed", "Non_AD", "Unknown", "Non_neurological")
+  d1$dementia_AD_non_AD[d1$dementia_type == "Other" & d1$dementia_other_description == "Congenital_hydrocephalus"] <- "Non_AD"
+  d1$dementia_AD_non_AD[d1$dementia_type == "Other" & d1$dementia_other_description == "HAND"] <- "Non_AD"
+  d1$dementia_AD_non_AD[d1$dementia_type == "Other" & d1$dementia_other_description == "korsakoff"] <- "Non_AD"
+  d1$dementia_AD_non_AD[d1$dementia_type == "Other" & d1$dementia_other_description == "Meningioma"] <- "Non_AD"
+  d1$dementia_AD_non_AD[d1$dementia_type == "Other" & d1$dementia_other_description == "traumatic"] <- "Non_AD"
+  d1$dementia_AD_non_AD[d1$dementia_type == "Other" & d1$dementia_other_description == "Dandy_Walker"] <- "Non_AD"
+  d1$dementia_AD_non_AD[d1$dementia_type == "Other" & d1$dementia_other_description == "encephalitis"] <- "Non_AD"
+  d1$dementia_AD_non_AD[d1$dementia_type == "Other" & d1$dementia_other_description == "hemorrhage"] <- "Non_AD"
+  d1$dementia_AD_non_AD[d1$dementia_type == "Other" & d1$dementia_other_description == "seq_from_cardiac_arrest"] <- "Non_AD"
+  d1$dementia_AD_non_AD[d1$dementia_type == "Other" & d1$dementia_other_description == "congenital_brain_damage"] <- "Non_AD"
+  d1$dementia_AD_non_AD[d1$dementia_type == "Other" & d1$dementia_other_description == "epilepsy"] <- "Non_AD"
+  d1$dementia_AD_non_AD[d1$dementia_type == "Other" & d1$dementia_other_description == "hypertensive_encephalopathy"] <- "Non_AD"
+  d1$dementia_AD_non_AD[d1$dementia_type == "Other" & d1$dementia_other_description == "meningioma"] <- "Non_AD"
+  d1$dementia_AD_non_AD[d1$dementia_type == "Other" & d1$dementia_other_description == "MS"] <- "Non_AD"
+  d1$dementia_AD_non_AD[d1$dementia_type == "Other" & d1$dementia_other_description == "myelit"] <- "Non_AD"
+  d1$dementia_AD_non_AD[d1$dementia_type == "Other" & d1$dementia_other_description == "Wernicke_encephalopathy"] <- "Non_AD"
+  d1$dementia_AD_non_AD[d1$dementia_type == "Other" & d1$dementia_other_description == "LATE"] <- "Non_AD"
+  d1$dementia_AD_non_AD[d1$dementia_type == "Other" & d1$dementia_other_description == "non_neurodegenerative_non_affective"] <- "Non_AD"
+  d1$dementia_AD_non_AD[d1$dementia_type == "Other" & d1$dementia_other_description == "b12"] <- "Non_neurological"
+  d1$dementia_AD_non_AD[d1$dementia_type == "Other" & d1$dementia_other_description == "drug_abuse"] <- "Non_neurological"
+  d1$dementia_AD_non_AD[d1$dementia_type == "Other" & d1$dementia_other_description == "multifactorial"] <- "Non_neurological"
+  d1$dementia_AD_non_AD[d1$dementia_type == "Other" & d1$dementia_other_description == "Nefropathy"] <- "Non_neurological"
+  d1$dementia_AD_non_AD[d1$dementia_type == "Other" & d1$dementia_other_description == "polyneuropathy"] <- "Non_neurological"
+  d1$dementia_AD_non_AD[d1$dementia_type == "Other" & d1$dementia_other_description == "sleepapnea_depression"] <- "Non_neurological"
+  d1$dementia_AD_non_AD[d1$dementia_type == "Other" & d1$dementia_other_description == "adhd"] <- "Non_neurological"
+  d1$dementia_AD_non_AD[d1$dementia_type == "Other" & d1$dementia_other_description == "metadon"] <- "Non_neurological"
+  d1$dementia_AD_non_AD[d1$dementia_type == "Other" & d1$dementia_other_description == "slepp_apnea"] <- "Non_neurological"
+  d1$dementia_AD_non_AD[d1$dementia_type == "Other" & d1$dementia_other_description == "autism"] <- "Non_neurological"
+  d1$dementia_AD_non_AD[d1$dementia_type == "Other" & d1$dementia_other_description == "diabetes"] <- "Non_neurological"
+  d1$dementia_AD_non_AD[d1$dementia_type == "Other" & d1$dementia_other_description == "pain"] <- "Non_neurological"
+  d1$dementia_AD_non_AD[d1$dementia_type == "Other" & d1$dementia_other_description == "sleep_apnea"] <- "Non_neurological"
+  d1$dementia_AD_non_AD[d1$dementia_type == "Other" & d1$dementia_other_description == "thyroid_disease"] <- "Non_neurological"
+  d1$dementia_AD_non_AD[d1$dementia_type == "Other" & d1$dementia_other_description == "Multifactorial"] <- "Non_neurological"
+  d1$dementia_AD_non_AD[d1$dementia_type == "Other" & d1$dementia_other_description == "cancer"] <- "Non_neurological"
+  d1$dementia_AD_non_AD[d1$dementia_type == "Other" & d1$dementia_other_description == "Unknown"] <- "Unknown"
+
+```
+
+
+### Change ALT from µkat/L into U/L and hbA1c from mmol/L to mmol/mol
+```{r}
+d1$swedes <- substr(d1$cpr, 1, 2) == "SV"
+d1$alat [d1$swedes == TRUE] <- d1$alat [d1$swedes == TRUE] * 60
+d1$hba1c [d1$swedes == FALSE] <- (d1$hba1c [d1$swedes == FALSE] - 0.8285) / 0.1455
+
+d1$csf_ab4240 <- as.factor(d1$csf_ab4240)
+  levels(d1$csf_ab4240) <- c("normal", "abnormal")
+```
+
+### Establish cut-offs (an additional egfr cut-off for africans is established based on existing guidelines)
+```{r}
+d1$bmi_categorical   <- cut(d1$bmi,
+                            breaks=c(0,18.5,30.0,100),
+                            labels=c('underweight', 'normal', 'overweight'))
+
+d1$creatinine_categorical <- ifelse(d1$sex == "female",
+                                    cut(d1$creatinine, breaks = c(0, 90, Inf), labels = c("normal", "abnormal")),
+                                    cut(d1$creatinine, breaks = c(0, 105, Inf), labels = c("normal", "abnormal")))
+                            d1$creatinine_categorical <- as.factor(d1$creatinine_categorical)
+                            levels(d1$creatinine_categorical) <- c("normal", "abnormal")
+
+d1$egfr_categorical   <- cut(d1$egfr,
+                               breaks=c(0,60,100),
+                               labels=c('abnormal', 'normal'))
+
+d1$alat_categorical   <- cut(d1$alat,
+                            breaks=c(0,10,70,100),
+                            labels=c('low', 'normal', 'high'))
+
+d1$hba1c_categorical   <- cut(d1$hba1c,
+                             breaks=c(0,48,Inf),
+                             labels=c('normal', 'high'))
+
+d1$tsh_categorical   <- cut(d1$tsh,
+                           breaks=c(0,0.3,4.5,Inf),
+                           labels=c('low', 'normal', 'high'))
+d1$diseases_per_pt <- (d1$diabetes + d1$hypertension + d1$hyperchol +
+                                  d1$stroke + d1$thyroid_disease + d1$kidney_disease +
+                                  d1$liver_disease + d1$ihd + d1$afli + d1$depression +
+                                  d1$neuropathy + d1$head_trauma + d1$sleep_disorder)
+d1$diseases_per_pt <- cut(d1$diseases_per_pt,
+                          breaks=c(-Inf,1,3,6),
+                          labels=c('0-1', '2-3', '4-6'))
+```
+
+### Subset minorities only
+```{r, warning=FALSE}
+d1_minority <- subset(d1, minority_majority == "Minority")
+d1_minority$date_only_year <- substr(d1_minority$date, start = 7, stop = 10)
+d1_minority$date_only_year <- as.numeric(d1_minority$date_only_year)
+d1_minority$years_in_dk <- d1_minority$date_only_year - d1_minority$immigration_year
+```
+
+
+### Check success of matching
+```{r, warning=FALSE}
+library(MatchIt)
+match_check <- matchit(minority_majority ~ age + sex, data = d1,
+                  method = "nearest", distance = "glm")
+summary(match_check, un = FALSE)
+```
+
+
+
+
+### **Compare based on ethnicity on background variables**
+```{r}
+summary(tableby(minority_majority ~ age + sex + education + cognitive_status + dementia_type, data=d1))
+
+summary(tableby(minority_majority ~ rudas_total + mce_total + mmse + ace + faq_iadl, data=d1,                 
+                numeric.stats=c("N", "median", "q1q3"), numeric.test = "kwt"))
+
+summary(tableby(minority_majority ~ bmi + creatinine + egfr + alat + hba1c + tsh, data=d1,
+                numeric.stats=c("N", "median", "q1q3"), numeric.test = "kwt"))
+
+summary(tableby(minority_majority ~ bmi_categorical + creatinine_categorical + egfr_categorical +
+                  alat_categorical + hba1c_categorical + tsh_categorical, data=d1))
+
+summary(tableby(minority_majority ~ diabetes+ hypertension+ hyperchol+ stroke+ thyroid_disease+
+                        kidney_disease+ liver_disease+ ihd+ afli+ depression+ neuropathy+
+                        head_trauma+ sleep_disorder, data=d1))
+
+summary(tableby(geographic_region ~ age + sex + education + cognitive_status + dementia_type, data=d1))
+summary(tableby(geographic_region ~ bmi + creatinine + egfr + alat + hba1c + tsh, data=d1,
+                numeric.stats=c("N", "median", "q1q3"), numeric.test = "kwt"))
+summary(tableby(geographic_region ~ diseases_per_pt, data=d1))
+summary(tableby(minority_majority ~ country_of_origin, data=d1))
+
+```
+
+
+
+### Create dataframe with patients with CSF
+```{r}
+d1_csf <- subset(d1, csf_ab42 == "normal" | csf_ab42 == "abnormal" |
+                 csf_ptau181 == "normal" | csf_ptau181 == "abnormal" |
+                 csf_ttau == "normal" | csf_ttau == "abnormal" |
+                 amyloid_pet == "normal" | amyloid_pet == "abnormal" |
+                 csf_ab4240 == "normal" | csf_ab4240 == "abnormal")
+
+d1csf_postive_3 <- subset(d1, csf_ab42 == "abnormal" & csf_ptau181 == "abnormal" & csf_ttau == "abnormal")
+
+
+summary(tableby(dementia_AD_non_AD ~ csf_ab42 + csf_ptau181 + csf_ttau + csf_nfl + amyloid_pet, data=d1_csf,
+                                numeric.stats=c("N", "median", "q1q3"), numeric.test = "kwt"))
+summary(tableby(dementia_AD_non_AD ~ ab42_raw + ptau181_raw + ttau_raw + amyloid_pet, data = d1_csf,
+                                numeric.stats=c("N", "median", "q1q3"), numeric.test = "kwt"))
+summary(tableby(minority_majority ~ age + sex + education, data=d1_csf))
+summary(tableby(minority_majority ~ cognitive_status + dementia_type, data=d1_csf,                 
+                numeric.stats=c("N", "median", "q1q3"), numeric.test = "kwt"))
+summary(tableby(minority_majority ~ bmi + egfr + hba1c, data=d1_csf,                 
+                numeric.stats=c("N", "median", "q1q3"), numeric.test = "kwt"))
+summary(tableby(dementia_AD_non_AD ~ age + sex + rudas_total + mce_total + mmse + ace, data=d1_csf,                 
+                numeric.stats=c("N", "median", "q1q3"), numeric.test = "kwt"))
+
+d1_csf_danish <- subset(d1_csf, swedes == FALSE)
+d1_csf_swedish <- subset(d1_csf, swedes == TRUE)
+ 
+```
+
+## Extracting danish csf material
+```{r, warning=FALSE}
+library(writexl)
+#write_xlsx(d1, "L:/LovbeskyttetMapper/BlooDiv/ptau217 study/Dataudtræk/Danish patients with CSF.xlsx")
+```
+
+
+### Regression test with CSF p-tau181 as outcome (with and without ethnicity)
+```{r}
+d1_csf$AD_clinical_status <- d1_csf$dementia_AD_non_AD
+d1_csf$AD_clinical_status <- fct_collapse(d1_csf$AD_clinical_status, AD_positive = c("AD_and_mixed"))
+d1_csf$AD_clinical_status <- fct_collapse(d1_csf$AD_clinical_status, AD_negative = c("Unknown", "Non_neurological", "Non_AD"))
+d1_csf$AD_clinical_status <- relevel(d1_csf$AD_clinical_status, ref = "AD_negative")   
+
+
+#impute median to ptau181, bmi and hba1c, exclude geographic
+library(tidyr)
+library(dplyr)
+d1_csf_for_lm <- d1_csf %>%
+  mutate(across(c(education, bmi, hba1c), ~ if_else(is.na(.), median(., na.rm = TRUE), .)))
+
+log_ptau181_raw <- log(d1_csf_for_lm$ptau181_raw)
+
+#Make linear model
+model_test_csf <- lm(log_ptau181_raw ~ AD_clinical_status + hba1c +  age + sex + education + diabetes + hypertension + bmi + egfr + diseases_per_pt + geographic_region, data = d1_csf_for_lm)
+summary(model_test_csf)
+plot(model_test_csf)
+#Calculate standardized B-coefficients
+library(lm.beta)
+std_model_test_csf <- lm.beta(model_test_csf)
+summary(std_model_test_csf)
+plot(std_model_test_csf)
+
+model_test_csf_noethnic <- lm(log_ptau181_raw ~ AD_clinical_status + hba1c +  age + sex + education + diabetes + hypertension + bmi + egfr + diseases_per_pt, data = d1_csf_for_lm)
+std_model_test_csf_noethnic <- lm.beta(model_test_csf_noethnic)
+
+library(sjPlot)
+plot_models(std_model_test_csf, std_model_test_csf_noethnic, 
+  m.labels = c("With ethnicity", "No ethnicity"),
+  show.values = FALSE, show.p = FALSE, p.shape = FALSE, spacing = 0.8,
+  title = "Mock plot with csf p-tau181")
+summary(std_model_test_csf)[[8]] #R2 for model = 23.6%
+summary(std_model_test_csf_noethnic)[[8]] #R2 for model = 21.6%
+```
