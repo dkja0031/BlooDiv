@@ -1,0 +1,84 @@
+---
+title: "Matching_Blood"
+author: "Daniel Kjærgaard"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, warning = FALSE,message = F)
+```
+
+## Matching the minorityethnic cohort with a majority cohort
+
+We are matching using the package 'MatchIt'. This will be executed by 1-to-1 matching 
+nearest neighbor propensity score matching on age and gender.
+
+There are 461 minority ethnic patients included.
+
+There are 4863 potentially majority ethnic patients.
+
+At baseline the groups differ on age but not on gender
+
+```{r}
+d_matching <- read.csv("FILE_PATH.csv", sep = ";")
+library(forcats)
+library(MatchIt)
+d_matching$PatientID <- as.character(d_matching$PatientID)
+d_matching$Gender <- as.factor(d_matching$Gender)
+d_matching$Consent <- as.factor(d_matching$Consent)
+d_matching$Minority <- as.factor(d_matching$Minority)
+
+d_matching_minority <- subset(d_matching, Minority == "Yes")
+d_matching_majority <- subset(d_matching, Minority == "No")
+
+t1 <- t.test(AgeAtVisit~Minority, data=d_matching, equal.var=FALSE)
+t1
+c(1,-1)%*%t.test(AgeAtVisit~Minority, data=d_matching)$estimate
+t.test(AgeAtVisit~Minority, data = d_matching)$conf.int
+
+c_table <- table(d_matching$Minority, d_matching$Gender)
+chi_result <- chisq.test(c_table)
+chi_result
+```
+
+## The actual matching below
+
+```{r}
+m.out1 <- matchit(Minority ~ AgeAtVisit + Gender, data = d_matching,
+                  method = "nearest", distance = "glm")
+m.out1
+```
+
+## Examine success of matching
+
+We see that the standardized means differences and eCDF are all below 0.1 indicating a successful matching
+
+```{r}
+
+summary(m.out1, un = FALSE)
+```
+
+
+## Plots to demonstrate the sucess of the matching
+```{r}
+plot(m.out1, type = "jitter", interactive = FALSE)
+
+plot(summary(m.out1))
+
+plot(m.out1, type = "density", interactive = FALSE,
+     which.xs = ~AgeAtVisit + Gender)
+```
+
+
+## Define new dataframe with matched patients
+```{r}
+matched_data <- match.data(m.out1)
+matched_data <- matched_data[-c(2:3, 12:22)]
+```
+
+## Export to excel
+```{r}
+library(writexl)
+write_xlsx(matched_data, "FILE_PATH.xlsx")
+```
