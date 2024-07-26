@@ -82,3 +82,47 @@ matched_data <- matched_data[-c(2:3, 12:22)]
 library(writexl)
 write_xlsx(matched_data, "FILE_PATH.xlsx")
 ```
+############################################################################
+# MATCHING ROUND 2 (REMAINING 65 PATIENTS)
+# I have excluded the danish patients matched in the first round 
+# leaving 4402 danish patients to be matched with
+
+d_matching_second <- read.csv("FILE_PATH.csv", sep = ";")
+
+#Transform to factors or numeric and rename factors (0 = not present)
+library(forcats)
+d_matching_second$PatientID <- as.character(d_matching_second$PatientID)
+d_matching_second$Gender <- as.factor(d_matching_second$Gender)
+d_matching_second$Consent <- as.factor(d_matching_second$Consent)
+d_matching_second$Minority <- as.factor(d_matching_second$Minority)
+
+library(MatchIt)
+
+m.out2 <- matchit(Minority ~ AgeAtVisit + Gender, data = d_matching_second,
+                  method = "nearest", distance = "glm")
+m.out2
+
+
+#Assessing the Quality of Matches
+summary(m.out2, un = FALSE)
+
+plot(m.out2, type = "jitter", interactive = FALSE)
+
+plot(summary(m.out2))
+
+plot(m.out2, type = "density", interactive = FALSE,
+     which.xs = ~AgeAtVisit + Gender)
+
+
+#Check out the new dataframe
+matched_data_2 <- match.data(m.out2)
+matched_data_2 <- matched_data_2[-c(10:12)]
+
+#Remove name rows from dataframe
+
+#export to excel
+library(writexl)
+write_xlsx(matched_data_2, "FILE_PATH.xlsx")
+
+
+
