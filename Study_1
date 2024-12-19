@@ -1,23 +1,22 @@
 ---
-title: "Blood-based biomarkers in the wild"
-author: "Daniel Kjærgaard"
+title: "Influence of ethnicity on the diagnostic accuracy of plasma p-tau217"
+author: "Daniel Kjaergaard"
 date: "`r Sys.Date()`"
 output: html_document
 ---
+This script was contains all code used for the statistical analyses. Dataframe and filepath are not disclosed because of privacy and datasecurity.
+
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE, message = FALSE) 
 ```
 
-# **BlooDiv: Blood-Based Biomarkers**
-
-### Read csv 
+################################################################ Read csv ################################################################
 ```{r}
-d <- read.csv("FILE_PATH", sep = ";")
-d_redcap <- subset(d, redcap_event_name == "t0_arm_1")
+d1 <- read.csv("FILEPATH.csv", sep = ";")
 ```
 
-### Open packages
+################################################################ Open packages ################################################################
 ```{r, results=FALSE, messages = FALSE, warning=FALSE}
 library(arsenal)
 library(forcats)
@@ -25,19 +24,19 @@ library(tidyr)
 library(ggplot2)
 library(ggsignif)
 library(dplyr)
+library(tidyverse)
+library(MatchIt)
+library(caret)
+library(pROC)
+library(pscl)
+library(lubridate)
+library(lm.beta)
+library(sjPlot)
+library(car)
+library(tidyverse)
 ```
 
-### Impute DDBBno, CSF_raw and amyloidPET_suvr
-```{r, warning=FALSE}
-to_impute <- read.csv("FILE_PATH", sep = ";")
-to_impute_selected <- to_impute %>% select(record_id, DDBBno, ab42_raw, ptau181_raw, ttau_raw, Amyloid_pet_SUVR, 
-                                           ab4240_raw, csf_ab4240, Swedish_ttau_cutoff, Swedish_ab42_cutoff, Swedish_ptau181_cutoff, Swedish_ab4240_cutoff)
-d1 <- left_join(d_redcap, to_impute_selected, by = "record_id")
-rm(d, d_redcap, to_impute, to_impute_selected) 
-```
-
-
-### Clean-up dataframe
+################################################################ Clean-up dataframe ################################################################
 ```{r, warning=FALSE}
 d1$sex <- as.factor(d1$sex)
   levels(d1$sex) <- c("female", "male")
@@ -51,12 +50,12 @@ d1$country_of_origin <- as.factor(d1$country_of_origin)
   d1$country_of_origin <- fct_collapse(d1$country_of_origin, Tunisia = c("Tunisia", "Tunesia"))
   d1$country_of_origin <- fct_collapse(d1$country_of_origin, Yugoslavia = c("Yugoslavia", "ExYugoslavia"))
   d1$geographic_region <- d1$country_of_origin
-  d1$geographic_region <- fct_collapse(d1$geographic_region, Denmark_Sweden = c("DK", "SWE"))
-  d1$geographic_region <- fct_collapse(d1$geographic_region, Geographic_middle_east = c("Turkey", "Iraq", "Iran", "Afghanistan",
+  d1$geographic_region <- fct_collapse(d1$geographic_region, DK = c("DK", "SWE"))
+  d1$geographic_region <- fct_collapse(d1$geographic_region, Mid_east = c("Turkey", "Iraq", "Iran", "Afghanistan",
                                                                                 "Azerbaijan", "Armenia", "Turkmenistan",
                                                                                 "Pakistan", "Syria", "Israel", "Lebanon",
                                                                                 "Palestine", "Qatar", "Yemen", "Cyprus", "Georgia"))
-  d1$geographic_region <- fct_collapse(d1$geographic_region, Geographic_europe = c("Albania", "Andorra", "Austria", "Belarus", 
+  d1$geographic_region <- fct_collapse(d1$geographic_region, Europe = c("Albania", "Andorra", "Austria", "Belarus", 
                                                           "Belgium", "Bosnia", "Bulgaria", 
                                                           "Croatia", "Cyprus", "Czech Republic", "Czechoslovakia", 
                                                           "Estonia", "Finland", "France", "Germany", "Greece", 
@@ -69,7 +68,7 @@ d1$country_of_origin <- as.factor(d1$country_of_origin)
                                                           "Spain", "Switzerland", "Turkey", "Ukraine", 
                                                           "United Kingdom", "Vatican City", "England", "ExYugoslavia",
                                                           "Faroe", "Greenland", "Macedonia", "Yugoslavia"))
-  d1$geographic_region <- fct_collapse(d1$geographic_region, Geographic_Africa = c("Algeria", "Angola", "Benin", "Botswana", 
+  d1$geographic_region <- fct_collapse(d1$geographic_region, Africa = c("Algeria", "Angola", "Benin", "Botswana", 
                                                                                    "Burkina Faso", 
                                                           "Burundi", "Cabo Verde", "Cameroon", "Central African Republic", 
                                                           "Chad", "Comoros", "Democratic Republic of the Congo", 
@@ -86,17 +85,8 @@ d1$country_of_origin <- as.factor(d1$country_of_origin)
 
 excluded_countries <- c("Argentina", "Australia", "Barbados", "Bolivia", "Brazil", "CentralAmerica", "Chile", "China", "Colombia", "Cuba", "ElSalvador", "India", "Indonesia", "Jamaica", "Japan", "Korea", "Malaysia", "Mexico", "NewZealand", "PapuaNewGuinea", "Philippines", "SriLanka", "Taiwan", "Thailand", "Trinidad", "Uruguay", "USA", "Vietnam")
  d1$geographic_region <- as.factor(ifelse(d1$geographic_region %in% excluded_countries, NA, as.character(d1$geographic_region)))
-  
-  d1$geographic_region <- relevel(d1$geographic_region, ref = "Denmark_Sweden")   
-  
-d1$primary_language <- as.factor(d1$primary_language)
+  d1$geographic_region <- relevel(d1$geographic_region, ref = "DK")   
 
-d1$interpreter <- as.factor(d1$interpreter)
-  levels(d1$interpreter) <- c("Yes", "No")
-  
-d1$interpreter_type <- as.factor(d1$interpreter_type)
-  levels(d1$interpreter_type) <- c("Professional", "Informal")
-  
 d1$cognitive_status <- as.factor(d1$cognitive_status)
   levels(d1$cognitive_status) <- c("NCI", "MCI", "Mild dementia", "moderate dementia", "severe dementia", "mild-severe psychiatric", "undecided", "SCD")
   d1$cognitive_status <- fct_collapse(d1$cognitive_status, SCD = c("NCI", "SCD"))
@@ -108,10 +98,21 @@ d1$dementia_type <- as.factor(d1$dementia_type)
   
 d1$unknown <- as.factor(d1$dementia_other_description == "Unknown")
   levels(d1$unknown) <- c("Specified", "Unspecified")
+
+d1$raw_ptau217_cutoff <- cut(d1$raw_Ptau217_Lilly,
+                         breaks=c(0,0.308,Inf),
+                         labels=c('217_normal', '217_abnormal'))
+                         d1$raw_ptau217_cutoff <- relevel(d1$raw_ptau217_cutoff, ref = "217_normal") 
   
-
-d1["mce_total"][d1["mce_total"] == 0] <- NA
-
+d1$norm_low_ptau217_cutoff <- cut(d1$Norm_Low_ptau217_Lilly,
+                         breaks=c(0,0.308,Inf),
+                         labels=c('217_normal', '217_abnormal'))
+                         d1$norm_low_ptau217_cutoff <- relevel(d1$norm_low_ptau217_cutoff, ref = "217_normal") 
+d1$norm_high_ptau217_cutoff <- cut(d1$Norm_High_ptau217_Lilly,
+                         breaks=c(0,0.308,Inf),
+                         labels=c('217_normal', '217_abnormal'))
+                         d1$norm_high_ptau217_cutoff <- relevel(d1$norm_high_ptau217_cutoff, ref = "217_normal") 
+  
 d1$diabetes <- ifelse(d1$diabetes == 2, 0, 1)
 d1$hypertension <- ifelse(d1$hypertension == 2, 0, 1)
 d1$hyperchol <- ifelse(d1$hyperchol == 2, 0, 1) 
@@ -135,12 +136,14 @@ d1$csf_ttau <- as.factor(d1$csf_ttau)
   levels(d1$csf_ttau) <- c("normal", "abnormal")
 d1$amyloid_pet <- as.factor(d1$amyloid_pet)
   levels(d1$amyloid_pet) <- c("normal", "abnormal")
-d1$fazeka <- as.factor(d1$fazeka)
-d1$mta <- as.factor(d1$mta)
-d1$gca <- as.factor(d1$gca)
+d1$csf_ab4240 <- as.factor(d1$csf_ab4240)
+  levels(d1$csf_ab4240) <- c("normal", "abnormal")
+
+d1$Center <- as.factor(d1$Center)
+
+d1$dementia_other_description <- as.factor(d1$dementia_other_description)
 
 d1$dementia_AD_non_AD <- d1$dementia_type
-d1$dementia_other_description <- as.factor(d1$dementia_other_description)
   d1$dementia_AD_non_AD <- fct_collapse(d1$dementia_AD_non_AD, AD_and_mixed = c(
     "AD", "mix"))
   d1$dementia_AD_non_AD <- fct_collapse(d1$dementia_AD_non_AD, Non_AD = c(
@@ -184,38 +187,41 @@ d1$dementia_other_description <- as.factor(d1$dementia_other_description)
   d1$dementia_AD_non_AD[d1$dementia_type == "Other" & d1$dementia_other_description == "cancer"] <- "Non_neurological"
   d1$dementia_AD_non_AD[d1$dementia_type == "Other" & d1$dementia_other_description == "Unknown"] <- "Unknown"
 
-```
+d1$AD_clinical_status <- d1$dementia_AD_non_AD
+d1$AD_clinical_status <- fct_collapse(d1$AD_clinical_status, CLI_AD_positive = c("AD_and_mixed"))
+d1$AD_clinical_status <- fct_collapse(d1$AD_clinical_status, CLI_AD_negative = c("Unknown", "Non_neurological", "Non_AD"))
+d1$AD_clinical_status <- relevel(d1$AD_clinical_status, ref = "CLI_AD_negative")   
 
 
-### Change ALT from µkat/L into U/L and hbA1c from mmol/L to mmol/mol
-```{r}
-d1$swedes <- substr(d1$cpr, 1, 2) == "SV"
-d1$alat [d1$swedes == TRUE] <- d1$alat [d1$swedes == TRUE] * 60
-d1$hba1c [d1$swedes == FALSE] <- (d1$hba1c [d1$swedes == FALSE] - 0.8285) / 0.1455
+d1$alat [d1$Center == "Memory Clinic Malmö"] <- d1$alat [d1$Center == "Memory Clinic Malmö"] * 60
+d1$hba1c [d1$Center == "Danish Dementia Biobank"] <- (d1$hba1c [d1$Center == "Danish Dementia Biobank"] - 0.8285) / 0.1455
 
-d1$csf_ab4240 <- as.factor(d1$csf_ab4240)
-  levels(d1$csf_ab4240) <- c("normal", "abnormal")
-```
-
-### Establish cut-offs (an additional egfr cut-off for africans is established based on existing guidelines)
-```{r}
 d1$bmi_categorical   <- cut(d1$bmi,
-                            breaks=c(0,18.5,30.0,100),
-                            labels=c('underweight', 'normal', 'overweight'))
+                            breaks=c(0,18.5,24.9, 29.9,100),
+                            labels=c('underweight', 'normal', 'overweight', 'obesity'))
+  d1$bmi_categorical <- relevel(d1$bmi_categorical, ref = "normal")   
+
 
 d1$creatinine_categorical <- ifelse(d1$sex == "female",
                                     cut(d1$creatinine, breaks = c(0, 90, Inf), labels = c("normal", "abnormal")),
                                     cut(d1$creatinine, breaks = c(0, 105, Inf), labels = c("normal", "abnormal")))
                             d1$creatinine_categorical <- as.factor(d1$creatinine_categorical)
                             levels(d1$creatinine_categorical) <- c("normal", "abnormal")
-
-d1$egfr_categorical   <- cut(d1$egfr,
+  
+d1$CKD   <- cut(d1$egfr,
                                breaks=c(0,60,100),
-                               labels=c('abnormal', 'normal'))
+                               labels=c('functional_CKD', 'Normal_kidney'))
+  d1$CKD <- relevel(d1$CKD, ref = "Normal_kidney")   
 
-d1$alat_categorical   <- cut(d1$alat,
-                            breaks=c(0,10,70,100),
-                            labels=c('low', 'normal', 'high'))
+
+d1$alat_categorical <- ifelse(d1$sex == "female",
+                                    cut(d1$alat, breaks = c(0, 10, 45, Inf), labels = c("alt_low", "alt_normal", "alt_abnormal")),
+                                    cut(d1$alat, breaks = c(0, 10, 70, Inf), labels = c("alt_low", "alt_normal", "alt_abnormal")))
+                            d1$alat_categorical <- as.factor(d1$alat_categorical)
+                            levels(d1$alat_categorical) <- c("alt_low", "alt_normal", "alt_abnormal")
+                              d1$alat_categorical <- relevel(d1$alat_categorical, ref = "alt_normal")   
+
+
 
 d1$hba1c_categorical   <- cut(d1$hba1c,
                              breaks=c(0,48,Inf),
@@ -224,131 +230,942 @@ d1$hba1c_categorical   <- cut(d1$hba1c,
 d1$tsh_categorical   <- cut(d1$tsh,
                            breaks=c(0,0.3,4.5,Inf),
                            labels=c('low', 'normal', 'high'))
+
 d1$diseases_per_pt <- (d1$diabetes + d1$hypertension + d1$hyperchol +
                                   d1$stroke + d1$thyroid_disease + d1$kidney_disease +
                                   d1$liver_disease + d1$ihd + d1$afli + d1$depression +
                                   d1$neuropathy + d1$head_trauma + d1$sleep_disorder)
 d1$diseases_per_pt <- cut(d1$diseases_per_pt,
                           breaks=c(-Inf,1,3,6),
-                          labels=c('0-1', '2-3', '4-6'))
-```
-
-### Subset minorities only
-```{r, warning=FALSE}
-d1_minority <- subset(d1, minority_majority == "Minority")
-d1_minority$date_only_year <- substr(d1_minority$date, start = 7, stop = 10)
-d1_minority$date_only_year <- as.numeric(d1_minority$date_only_year)
-d1_minority$years_in_dk <- d1_minority$date_only_year - d1_minority$immigration_year
+                          labels=c('cormor_0-1', 'cormor_2-3', 'cormor_4-6'))
 ```
 
 
-### Check success of matching
+################################################################ Check success of matching ################################################################
+See Github file "Matching" for code used for matching
+
 ```{r, warning=FALSE}
-library(MatchIt)
 match_check <- matchit(minority_majority ~ age + sex, data = d1,
                   method = "nearest", distance = "glm")
 summary(match_check, un = FALSE)
 ```
 
 
-
-
-### **Compare based on ethnicity on background variables**
+################################################################ Check normality of plasma p-tau217 ################################################################
 ```{r}
-summary(tableby(minority_majority ~ age + sex + education + cognitive_status + dementia_type, data=d1))
+hist(d1$raw_Ptau217_Lilly, probability = TRUE, breaks = 30)
+hist(log(d1$raw_Ptau217_Lilly), probability = TRUE, breaks = 30)
+qqnorm(scale(d1$raw_Ptau217_Lilly))
+abline(0,1)
+qqnorm(scale(log(d1$raw_Ptau217_Lilly)))
+abline(0,1)
 
-summary(tableby(minority_majority ~ rudas_total + mce_total + mmse + ace + faq_iadl, data=d1,                 
-                numeric.stats=c("N", "median", "q1q3"), numeric.test = "kwt"))
-
-summary(tableby(minority_majority ~ bmi + creatinine + egfr + alat + hba1c + tsh, data=d1,
-                numeric.stats=c("N", "median", "q1q3"), numeric.test = "kwt"))
-
-summary(tableby(minority_majority ~ bmi_categorical + creatinine_categorical + egfr_categorical +
-                  alat_categorical + hba1c_categorical + tsh_categorical, data=d1))
-
-summary(tableby(minority_majority ~ diabetes+ hypertension+ hyperchol+ stroke+ thyroid_disease+
-                        kidney_disease+ liver_disease+ ihd+ afli+ depression+ neuropathy+
-                        head_trauma+ sleep_disorder, data=d1))
-
-summary(tableby(geographic_region ~ age + sex + education + cognitive_status + dementia_type, data=d1))
-summary(tableby(geographic_region ~ bmi + creatinine + egfr + alat + hba1c + tsh, data=d1,
-                numeric.stats=c("N", "median", "q1q3"), numeric.test = "kwt"))
-summary(tableby(geographic_region ~ diseases_per_pt, data=d1))
-summary(tableby(minority_majority ~ country_of_origin, data=d1))
+hist(d1$age)
+hist(d1$education)
+hist(d1$raw_Ptau217_Lilly)
+hist(d1$bmi)
+hist(d1$egfr)
+hist(d1$alat)
+hist(d1$hba1c)
+hist(d1$tsh)
 
 ```
 
 
 
-### Create dataframe with patients with CSF
+################################################################ **TABLE 1** ################################################################
+```{r}
+mean_settings  <- tableby.control(test=TRUE, total=FALSE,
+                               numeric.test = "anova", cat.test="chisq",
+                               numeric.stats=c("N", "mean", "sd"),
+                               cat.stats=c("countpct"))
+median_settings  <- tableby.control(test=TRUE, total=FALSE,
+                               numeric.test="kwt", cat.test="chisq",
+                               numeric.stats=c("N", "median", "q1q3"),
+                               cat.stats=c("countpct"))
+
+summary(tableby(minority_majority ~ Center, data=d1, control = mean_settings))
+summary(tableby(minority_majority ~ age + sex + education, data=d1, control = mean_settings))
+summary(tableby(minority_majority ~ raw_Ptau217_Lilly, data=d1, control = median_settings))
+summary(tableby(minority_majority ~ dementia_type, data=d1, control = mean_settings))
+summary(tableby(minority_majority ~ bmi + egfr + alat + hba1c + tsh + diseases_per_pt, data=d1, control = median_settings))
+summary(tableby(minority_majority ~ CKD, data=d1, control = mean_settings))
+
+
+summary(tableby(geographic_region ~ Center, data=d1, control = mean_settings))
+summary(tableby(geographic_region ~ age + sex + education, data=d1, control = mean_settings))
+summary(tableby(geographic_region ~ raw_Ptau217_Lilly, data=d1, control = median_settings))
+summary(tableby(geographic_region ~ dementia_type, data=d1, control = median_settings))
+summary(tableby(geographic_region ~ bmi + egfr + alat + hba1c + tsh, data=d1, control = median_settings))
+summary(tableby(geographic_region ~ diseases_per_pt, data=d1, control = median_settings))
+summary(tableby(geographic_region ~ CKD, data=d1, control = median_settings))
+
+```
+
+
+################################################################ Create dataframe with patients with CSF or AB-PET ################################################################
 ```{r}
 d1_csf <- subset(d1, csf_ab42 == "normal" | csf_ab42 == "abnormal" |
-                 csf_ptau181 == "normal" | csf_ptau181 == "abnormal" |
-                 csf_ttau == "normal" | csf_ttau == "abnormal" |
-                 amyloid_pet == "normal" | amyloid_pet == "abnormal" |
-                 csf_ab4240 == "normal" | csf_ab4240 == "abnormal")
+                   csf_ptau181 == "normal" | csf_ptau181 == "abnormal" |
+                   csf_ttau == "normal" | csf_ttau == "abnormal" |
+                   amyloid_pet == "normal" | amyloid_pet == "abnormal" |
+                   csf_ab4240 == "normal" | csf_ab4240 == "abnormal")
 
-d1csf_postive_3 <- subset(d1, csf_ab42 == "abnormal" & csf_ptau181 == "abnormal" & csf_ttau == "abnormal")
+#Defining the assays used was dependent on date (day-month-year)
+d1_csf$date_2 <- as_date(d1_csf$date)
+d1_csf$assay_change_group <- factor(
+  ifelse(
+    d1_csf$Center == "Danish Dementia Biobank" & d1_csf$date_2 >= as_date("2020-01-01") & d1_csf$date_2 <= as_date("2022-06-30"),
+    "InnotestELISA",
+  ifelse(
+      d1_csf$Center == "Danish Dementia Biobank" & d1_csf$date_2 >= as_date("2022-07-01") & d1_csf$date_2 <= as_date("2023-12-31"),
+      "ElecsysVersion2",
+  ifelse(
+    d1_csf$Center == "Memory Clinic Malmö" & d1_csf$date_2 >= as_date("2017-01-01") & d1_csf$date_2 <= as_date("2019-10-31"),
+    "MSDAssay",
+  ifelse(
+      d1_csf$Center == "Memory Clinic Malmö" & d1_csf$date_2 >= as_date("2019-11-01") & d1_csf$date_2 <= as_date("2025-01-01"),
+      "Lumipulse",
+      NA)))),
+  levels = c("InnotestELISA", "ElecsysVersion2", "MSDAssay", "Lumipulse"))
+  
+d1_csf$ptauratio <- d1_csf$ptau181_raw/d1_csf$ab42_raw
+d1_csf$ptauratio_reversed <- d1_csf$ab42_raw/d1_csf$ptau181_raw
 
+d1_csf <- d1_csf %>%
+  mutate(
+    AD_biomarker_status = case_when(
+      amyloid_pet == "abnormal" & assay_change_group == "InnotestELISA" & ptauratio_reversed < 17.7 ~ "BIO_AD_Positive",
+      amyloid_pet == "normal" & assay_change_group == "InnotestELISA" & ptauratio_reversed < 17.7 ~ "BIO_AD_Negative",
+      amyloid_pet == "normal" & assay_change_group == "InnotestELISA" & ptauratio_reversed > 17.7 ~ "BIO_AD_Negative",
+      amyloid_pet == "abnormal" & assay_change_group == "InnotestELISA" & ptauratio_reversed > 17.7 ~ "BIO_AD_Positive",
+      is.na(amyloid_pet) & assay_change_group == "InnotestELISA" & ptauratio_reversed < 17.7 ~ "BIO_AD_Positive",
+      is.na(amyloid_pet) & assay_change_group == "InnotestELISA" & ptauratio_reversed > 17.7 ~ "BIO_AD_Negative",
+      amyloid_pet == "abnormal" & assay_change_group == "InnotestELISA" & is.na(ptauratio_reversed) ~ "BIO_AD_Positive",
+      amyloid_pet == "normal" & assay_change_group == "InnotestELISA" & is.na(ptauratio_reversed) ~ "BIO_AD_Negative",
+        amyloid_pet == "abnormal" & assay_change_group == "ElecsysVersion2" & ptauratio > 0.023 ~ "BIO_AD_Positive",
+        amyloid_pet == "normal" & assay_change_group == "ElecsysVersion2" & ptauratio > 0.023 ~ "BIO_AD_Negative",
+        amyloid_pet == "normal" & assay_change_group == "ElecsysVersion2" & ptauratio < 0.023 ~ "BIO_AD_Negative",
+        amyloid_pet == "abnormal" & assay_change_group == "ElecsysVersion2" & ptauratio < 0.023 ~ "BIO_AD_Positive",
+        is.na(amyloid_pet) & assay_change_group == "ElecsysVersion2" & ptauratio > 0.023 ~ "BIO_AD_Positive",
+        is.na(amyloid_pet) & assay_change_group == "ElecsysVersion2" & ptauratio < 0.023 ~ "BIO_AD_Negative",
+        amyloid_pet == "abnormal" & assay_change_group == "ElecsysVersion2" & is.na(ptauratio) ~ "BIO_AD_Positive",
+        amyloid_pet == "normal" & assay_change_group == "ElecsysVersion2" & is.na(ptauratio) ~ "BIO_AD_Negative",
+          amyloid_pet == "abnormal" & assay_change_group == "MSDAssay" & ptauratio_reversed < 9.89 ~ "BIO_AD_Positive",
+          amyloid_pet == "normal" & assay_change_group == "MSDAssay" & ptauratio_reversed < 9.89 ~ "BIO_AD_Negative",
+          amyloid_pet == "normal" & assay_change_group == "MSDAssay" & ptauratio_reversed > 9.89 ~ "BIO_AD_Negative",
+          amyloid_pet == "abnormal" & assay_change_group == "MSDAssay" & ptauratio_reversed > 9.89 ~ "BIO_AD_Positive",
+          is.na(amyloid_pet) & assay_change_group == "MSDAssay" & ptauratio_reversed < 9.89 ~ "BIO_AD_Positive",
+          is.na(amyloid_pet) & assay_change_group == "MSDAssay" & ptauratio_reversed > 9.89 ~ "BIO_AD_Negative",
+          amyloid_pet == "abnormal" & assay_change_group == "MSDAssay" & is.na(ptauratio_reversed) ~ "BIO_AD_Positive",
+          amyloid_pet == "normal" & assay_change_group == "MSDAssay" & is.na(ptauratio_reversed) ~ "BIO_AD_Negative",
+            amyloid_pet == "abnormal" & assay_change_group == "Lumipulse" & ptauratio > 0.072 ~ "BIO_AD_Positive",
+            amyloid_pet == "normal" & assay_change_group == "Lumipulse" & ptauratio > 0.072 ~ "BIO_AD_Negative",
+            amyloid_pet == "normal" & assay_change_group == "Lumipulse" & ptauratio < 0.072 ~ "BIO_AD_Negative",
+            amyloid_pet == "abnormal" & assay_change_group == "Lumipulse" & ptauratio < 0.072 ~ "BIO_AD_Positive",
+            is.na(amyloid_pet) & assay_change_group == "Lumipulse" & ptauratio > 0.072 ~ "BIO_AD_Positive",
+            is.na(amyloid_pet) & assay_change_group == "Lumipulse" & ptauratio < 0.072 ~ "BIO_AD_Negative",
+            amyloid_pet == "abnormal" & assay_change_group == "Lumipulse" & is.na(ptauratio) ~ "BIO_AD_Positive",
+            amyloid_pet == "normal" & assay_change_group == "Lumipulse" & is.na(ptauratio) ~ "BIO_AD_Negative",
+                      TRUE ~ "Review"))
 
-summary(tableby(dementia_AD_non_AD ~ csf_ab42 + csf_ptau181 + csf_ttau + csf_nfl + amyloid_pet, data=d1_csf,
-                                numeric.stats=c("N", "median", "q1q3"), numeric.test = "kwt"))
-summary(tableby(dementia_AD_non_AD ~ ab42_raw + ptau181_raw + ttau_raw + amyloid_pet, data = d1_csf,
-                                numeric.stats=c("N", "median", "q1q3"), numeric.test = "kwt"))
-summary(tableby(minority_majority ~ age + sex + education, data=d1_csf))
-summary(tableby(minority_majority ~ cognitive_status + dementia_type, data=d1_csf,                 
-                numeric.stats=c("N", "median", "q1q3"), numeric.test = "kwt"))
-summary(tableby(minority_majority ~ bmi + egfr + hba1c, data=d1_csf,                 
-                numeric.stats=c("N", "median", "q1q3"), numeric.test = "kwt"))
-summary(tableby(dementia_AD_non_AD ~ age + sex + rudas_total + mce_total + mmse + ace, data=d1_csf,                 
-                numeric.stats=c("N", "median", "q1q3"), numeric.test = "kwt"))
-
-d1_csf_danish <- subset(d1_csf, swedes == FALSE)
-d1_csf_swedish <- subset(d1_csf, swedes == TRUE)
- 
+d1_csf$AD_biomarker_status <- as.factor(d1_csf$AD_biomarker_status)
+d1_csf <- subset(d1_csf, AD_biomarker_status!= "Review")
+d1_csf$AD_biomarker_status <- droplevels(d1_csf$AD_biomarker_status)
 ```
 
-## Extracting danish csf material
-```{r, warning=FALSE}
-library(writexl)
-#write_xlsx(d1, "L:/LovbeskyttetMapper/BlooDiv/ptau217 study/Dataudtræk/Danish patients with CSF.xlsx")
-```
-
-
-### Regression test with CSF p-tau181 as outcome (with and without ethnicity)
+################################################################ **TABLE 2** ################################################################
 ```{r}
-d1_csf$AD_clinical_status <- d1_csf$dementia_AD_non_AD
-d1_csf$AD_clinical_status <- fct_collapse(d1_csf$AD_clinical_status, AD_positive = c("AD_and_mixed"))
-d1_csf$AD_clinical_status <- fct_collapse(d1_csf$AD_clinical_status, AD_negative = c("Unknown", "Non_neurological", "Non_AD"))
-d1_csf$AD_clinical_status <- relevel(d1_csf$AD_clinical_status, ref = "AD_negative")   
+summary(tableby(minority_majority ~ AD_biomarker_status, data=d1_csf, control = median_settings))
+summary(tableby(geographic_region ~ AD_biomarker_status, data=d1_csf, control = median_settings))
+
+summary(tableby(AD_biomarker_status ~ raw_Ptau217_Lilly, data=d1_csf, control = median_settings))
+summary(tableby(AD_biomarker_status ~ age + sex + geographic_region, data=d1_csf, control = mean_settings))
+summary(tableby(AD_biomarker_status ~ bmi + egfr + alat + hba1c + diseases_per_pt, data=d1_csf, control = median_settings))
+summary(tableby(AD_biomarker_status ~ CKD, data=d1_csf, control = median_settings))
+
+```
 
 
-#impute median to ptau181, bmi and hba1c, exclude geographic
-library(tidyr)
-library(dplyr)
-d1_csf_for_lm <- d1_csf %>%
-  mutate(across(c(education, bmi, hba1c), ~ if_else(is.na(.), median(., na.rm = TRUE), .)))
+################################################################ Linear regression: Model assumptions ################################################################
+```{r}
+d1_lm_assumptions <- data.frame(
+  d1$raw_Ptau217_Lilly,
+  d1$age,
+  d1$sex,
+  d1$education,
+  d1$geographic_region,
+  d1$egfr,
+  d1$bmi,
+  d1$hba1c,
+  d1$tsh,
+  d1$alat,
+  d1$AD_clinical_status)
 
-log_ptau181_raw <- log(d1_csf_for_lm$ptau181_raw)
+#removing incomplete cases
+d1_lm_assumptions <- d1_lm_assumptions[complete.cases(d1_lm_assumptions), ]
 
-#Make linear model
-model_test_csf <- lm(log_ptau181_raw ~ AD_clinical_status + hba1c +  age + sex + education + diabetes + hypertension + bmi + egfr + diseases_per_pt + geographic_region, data = d1_csf_for_lm)
-summary(model_test_csf)
-plot(model_test_csf)
+#create log and raw models
+model_217_raw <- lm(d1.raw_Ptau217_Lilly ~ d1.AD_clinical_status + d1.hba1c +  d1.age + d1.sex + d1.education + d1.bmi + d1.egfr + d1.tsh + d1.alat +  d1.geographic_region, data = d1_lm_assumptions)
+model_log_217_raw <- lm(log(d1.raw_Ptau217_Lilly) ~ d1.AD_clinical_status + d1.hba1c +  d1.age + d1.sex + d1.education + d1.bmi + d1.egfr + d1.tsh + d1.alat +  d1.geographic_region, data = d1_lm_assumptions)
+
+
+#Normality (Use log-transformed)
+qqnorm(rstudent(model_217_raw))
+abline(0,1)
+hist(resid(model_217_raw), probability = TRUE)
+
+qqnorm(rstudent(model_log_217_raw))
+abline(0,1)
+hist(resid(model_log_217_raw), probability = TRUE)
+
+
+#Linearity
+plot(rstudent(model_log_217_raw)~d1_lm_assumptions$d1.age)
+abline(h=0)
+abline(h=-1.96, col = "red")
+abline(h=1.96, col = "red")
+
+plot(rstudent(model_log_217_raw)~d1_lm_assumptions$d1.bmi)
+abline(h=0)
+abline(h=-1.96, col = "red")
+abline(h=1.96, col = "red")
+
+plot(rstudent(model_log_217_raw)~d1_lm_assumptions$d1.egfr)
+abline(h=0)
+abline(h=-1.96, col = "red")
+abline(h=1.96, col = "red")
+
+#Variance homogeneity
+plot(model_log_217_raw, which = 1, cex.lab = 1.5)
+plot(model_log_217_raw, which = 3, cex.lab = 1.5)
+abline(h=0)
+
+# Outliers
+plot(model_217_raw, which = 4)
+abline(h=0.1, col = "red")
+plot(model_log_217_raw, which = 4)
+
+# Exclude "Unknown" from d1
+d1_excl_unknown <- subset(d1, unknown != "Unspecified")
+```
+
+################################################################ Multiple linear regressions ################################################################
+```{r}
+model_log_217_raw <- lm(log(raw_Ptau217_Lilly) ~ geographic_region + hba1c + age + sex + bmi + egfr + AD_clinical_status, data = d1_excl_unknown)
+model_log_217_raw_BIO <- lm(log(raw_Ptau217_Lilly) ~ AD_biomarker_status + geographic_region + hba1c + age + sex + bmi + egfr, data = d1_csf)
+```
+
+################################################################ *FIGURE 1* ################################################################
+```{r}
 #Calculate standardized B-coefficients
-library(lm.beta)
-std_model_test_csf <- lm.beta(model_test_csf)
-summary(std_model_test_csf)
-plot(std_model_test_csf)
+#std B: unitless and refer to how many standard deviations a dependent variable will change, per standard deviation increase in the predictor variable
+std_model_model_log_217_raw <- lm.beta(model_log_217_raw)
+std_model_model_log_217_raw_BIO <- lm.beta(model_log_217_raw_BIO)
 
-model_test_csf_noethnic <- lm(log_ptau181_raw ~ AD_clinical_status + hba1c +  age + sex + education + diabetes + hypertension + bmi + egfr + diseases_per_pt, data = d1_csf_for_lm)
-std_model_test_csf_noethnic <- lm.beta(model_test_csf_noethnic)
+summary(std_model_model_log_217_raw)
+confint(std_model_model_log_217_raw, level = 0.95)
 
-library(sjPlot)
-plot_models(std_model_test_csf, std_model_test_csf_noethnic, 
-  m.labels = c("With ethnicity", "No ethnicity"),
-  show.values = FALSE, show.p = FALSE, p.shape = FALSE, spacing = 0.8,
-  title = "Mock plot with csf p-tau181")
-summary(std_model_test_csf)[[8]] #R2 for model = 23.6%
-summary(std_model_test_csf_noethnic)[[8]] #R2 for model = 21.6%
+summary(std_model_model_log_217_raw_BIO)
+confint(std_model_model_log_217_raw_BIO, level = 0.95)
+
+
+#Standard Beta and adjusted x-axis
+theme_set(theme_sjplot())
+plot_models(
+  std_model_model_log_217_raw, std_model_model_log_217_raw_BIO,
+  m.labels = c("Full cohort", "CSF/Aβ-PET cohort"),
+  axis.labels = c("CSF/Aβ-PET AD pathology", "Clinical AD status", "eGFR", "BMI", "Sex (Male)", "Age", "HbA1c", "Middle East", "Europe", "Africa"),
+  show.values = FALSE, show.p = FALSE, p.shape = FALSE, spacing = 1.0,
+  vline.color = "black",
+  title = "Standardized Beta Coefficients")
+```
+
+
+################################################################ DIAGNOSTIC ACCURACY ################################################################
+#Model assumptions (GLM)
+```{r}
+#Define dataframe
+d1_glm_assumption <- d1
+d1_glm_assumption <- d1_glm_assumption[!is.na(d1_glm_assumption$geographic_region), ]
+d1_glm_assumption <- d1_glm_assumption[!is.na(d1_glm_assumption$egfr), ]
+d1_glm_assumption <- d1_glm_assumption[!is.na(d1_glm_assumption$bmi), ]
+
+#Make GLM for all data
+glm_assumption_check <- glm(AD_clinical_status ~ raw_Ptau217_Lilly + age + sex + bmi + geographic_region + egfr, family=binomial(link='logit'),
+                            data = d1_glm_assumption)    
+
+# Response variable is binary
+levels(d1_glm_assumption$AD_clinical_status)
+
+#Extreme outliers (one identified, cooks D > 0.1)
+plot(glm_assumption_check, which = 4, id.n = 3)
+abline(h = 0.1, col = "red", lty = 2)
+
+
+# Linearity
+d1_glm_assumption |> 
+  mutate(comp_res = coef(glm_assumption_check)["age"]*age + residuals(glm_assumption_check, type = "working")) |> 
+  ggplot(aes(x = age, y = comp_res)) +
+  geom_point() +
+  geom_smooth(color = "red", method = "lm", linetype = 2, se = F) +
+  geom_smooth(se = F)
+d1_glm_assumption |> 
+  mutate(comp_res = coef(glm_assumption_check)["bmi"]*bmi + residuals(glm_assumption_check, type = "working")) |> 
+  ggplot(aes(x = bmi, y = comp_res)) +
+  geom_point() +
+  geom_smooth(color = "red", method = "lm", linetype = 2, se = F) +
+  geom_smooth(se = F)
+d1_glm_assumption |> 
+  mutate(comp_res = coef(glm_assumption_check)["egfr"]*egfr + residuals(glm_assumption_check, type = "working")) |> 
+  ggplot(aes(x = egfr, y = comp_res)) +
+  geom_point() +
+  geom_smooth(color = "red", method = "lm", linetype = 2, se = F) +
+  geom_smooth(se = F)
+
+
+# Observations are independent
+plot(glm_assumption_check, which = 3)
+plot(glm_assumption_check)
+
+#No multicollinearity among predictors (GVIF ~ 1, not above 5)
+car::vif(glm_assumption_check)
+
+#Assumptions are all appropriate although there is 1 outlier record id 148 (lowest eGFR)
+d1_glm_assumption_excl_outliers <- subset(d1_glm_assumption, !(record_id %in% c(148)))
+glm_assumption_excl_outliers <- glm(AD_clinical_status ~ raw_Ptau217_Lilly + age + sex + bmi + geographic_region + egfr,
+                                      family=binomial(link='logit'), data = d1_glm_assumption_excl_outliers)
+plot(glm_assumption_excl_outliers, which = 4, id.n = 3)
+abline(h = 0.1, col = "red", lty = 2)
+plot(glm_assumption_excl_outliers, which = 3)
+summary(glm_assumption_excl_outliers)
+d1_glm_assumption_excl_outliers |> 
+  mutate(comp_res = coef(glm_assumption_excl_outliers)["age"]*age + residuals(glm_assumption_excl_outliers, type = "working")) |> 
+  ggplot(aes(x = age, y = comp_res)) +
+  geom_point() +
+  geom_smooth(color = "red", method = "lm", linetype = 2, se = F) +
+  geom_smooth(se = F)
+d1_glm_assumption_excl_outliers |> 
+  mutate(comp_res = coef(glm_assumption_excl_outliers)["bmi"]*bmi + residuals(glm_assumption_excl_outliers, type = "working")) |> 
+  ggplot(aes(x = bmi, y = comp_res)) +
+  geom_point() +
+  geom_smooth(color = "red", method = "lm", linetype = 2, se = F) +
+  geom_smooth(se = F)
+d1_glm_assumption |> 
+  mutate(comp_res = coef(glm_assumption_excl_outliers)["egfr"]*egfr + residuals(glm_assumption_excl_outliers, type = "working")) |> 
+  ggplot(aes(x = egfr, y = comp_res)) +
+  geom_point() +
+  geom_smooth(color = "red", method = "lm", linetype = 2, se = F) +
+  geom_smooth(se = F)
+```
+
+
+
+################################################################# K-fold cross validation **Table 3** ################################################################
+```{r}
+# run the code without the outliers: dataframe <- subset(d1_prediction, !(record_id %in% c(148)))
+options(scipen = 999)
+
+d1_k_fold <- d1
+d1_k_fold <- d1_k_fold[!is.na(d1_k_fold$geographic_region), ]
+d1_k_fold <- d1_k_fold[!is.na(d1_k_fold$egfr), ]
+d1_k_fold <- d1_k_fold[!is.na(d1_k_fold$bmi), ]
+d1_k_fold <- subset(d1_k_fold, unknown!= "Unspecified")
+
+
+#Logistirc regression
+model_glm_ptau_only <- glm(AD_clinical_status ~ raw_Ptau217_Lilly, data = d1_k_fold, family = binomial())
+model_glm_ethnicity <- glm(AD_clinical_status ~ raw_Ptau217_Lilly + geographic_region, data = d1_k_fold, family = binomial())
+model_glm_covariates <- glm(AD_clinical_status ~ raw_Ptau217_Lilly + age + sex + bmi + egfr, data = d1_k_fold, family = binomial())
+model_glm_full <- glm(AD_clinical_status ~ raw_Ptau217_Lilly + age + sex + bmi + egfr + geographic_region, data = d1_k_fold, family = binomial())
+
+summary(model_glm_ptau_only)
+confint(model_glm_ptau_only)
+pR2(model_glm_ptau_only)
+
+summary(model_glm_ethnicity)
+confint(model_glm_ethnicity)
+pR2(model_glm_ethnicity)
+
+summary(model_glm_covariates)
+confint(model_glm_covariates)
+pR2(model_glm_covariates)
+
+summary(model_glm_full)
+confint(model_glm_full)
+pR2(model_glm_full)
+
+
+print(cbind(exp(model_glm_ptau_only$coefficients), exp(confint(model_glm_ptau_only))))
+print(cbind(exp(model_glm_ethnicity$coefficients), exp(confint(model_glm_ethnicity))))
+print(cbind(exp(model_glm_covariates$coefficients), exp(confint(model_glm_covariates))))
+print(cbind(exp(model_glm_full$coefficients), exp(confint(model_glm_full))))
+
+
+#ROC k-fold
+set.seed(123)
+ctrl_clinical <- trainControl(
+                     method="cv", 
+                     number = 10, 
+                     summaryFunction=twoClassSummary, 
+                     classProbs=TRUE,
+                     savePredictions = TRUE)
+model_glm_k_fold_ptau_only <- train(AD_clinical_status ~ raw_Ptau217_Lilly,
+               data = d1_k_fold, 
+               method = "glm", 
+               family = binomial(), 
+               metric = "ROC",
+               trControl = ctrl_clinical)
+model_glm_k_fold_ethnicity <- train(AD_clinical_status ~ raw_Ptau217_Lilly + geographic_region,
+               data = d1_k_fold, 
+               method = "glm", 
+               family = binomial(), 
+               metric = "ROC",
+               trControl = ctrl_clinical)
+model_glm_k_fold_covariates <- train(AD_clinical_status ~ raw_Ptau217_Lilly + age + sex + bmi + egfr,
+               data = d1_k_fold, 
+               method = "glm", 
+               family = binomial(), 
+               metric = "ROC",
+               trControl = ctrl_clinical)
+model_glm_k_fold_full <- train(AD_clinical_status ~ raw_Ptau217_Lilly + age + sex + bmi + egfr + geographic_region,
+               data = d1_k_fold, 
+               method = "glm", 
+               family = binomial(), 
+               metric = "ROC",
+               trControl = ctrl_clinical)
+
+
+print(model_glm_k_fold_ptau_only,showSD=T)
+print(model_glm_k_fold_ethnicity,showSD=T)
+print(model_glm_k_fold_covariates,showSD=T)
+print(model_glm_k_fold_full,showSD=T)
+
+
+roc_object_k_fold_ptau_only <- roc(
+                 response = model_glm_k_fold_ptau_only$pred$obs, 
+                 predictor = model_glm_k_fold_ptau_only$pred$CLI_AD_positive,
+                 levels = rev(levels(model_glm_k_fold_ptau_only$pred$obs)))
+roc_object_k_fold_ethnicity <- roc(
+                 response = model_glm_k_fold_ethnicity$pred$obs, 
+                 predictor = model_glm_k_fold_ethnicity$pred$CLI_AD_positive,
+                 levels = rev(levels(model_glm_k_fold_ethnicity$pred$obs)))
+roc_object_k_fold_covariates <- roc(
+                 response = model_glm_k_fold_covariates$pred$obs, 
+                 predictor = model_glm_k_fold_covariates$pred$CLI_AD_positive,
+                 levels = rev(levels(model_glm_k_fold_covariates$pred$obs)))
+roc_object_k_fold_full <- roc(
+                 response = model_glm_k_fold_full$pred$obs, 
+                 predictor = model_glm_k_fold_full$pred$CLI_AD_positive,
+                 levels = rev(levels(model_glm_k_fold_full$pred$obs)))
+
+#The AUC for each fold
+model_glm_k_fold_ptau_only$resample$ROC
+model_glm_k_fold_ethnicity$resample$ROC
+model_glm_k_fold_covariates$resample$ROC
+model_glm_k_fold_full$resample$ROC
+```
+
+################################################################ K-fold cross validation **Supplementary Table 4** ################################################################
+```{r}
+d1_csf_k_fold <- d1_csf
+d1_csf_k_fold <- d1_csf_k_fold[!is.na(d1_csf_k_fold$geographic_region), ]
+d1_csf_k_fold <- d1_csf_k_fold[!is.na(d1_csf_k_fold$egfr), ]
+d1_csf_k_fold <- d1_csf_k_fold[!is.na(d1_csf_k_fold$bmi), ]
+d1_csf_k_fold$AD_biomarker_status <- droplevels(d1_csf_k_fold$AD_biomarker_status)
+d1_csf_k_fold$AD_biomarker_status <- as.factor(d1_csf_k_fold$AD_biomarker_status)
+
+
+#Logistic regression
+model_glm_csf_ptau_only <- glm(AD_biomarker_status ~ raw_Ptau217_Lilly, data = d1_csf_k_fold, family = binomial())
+model_glm_csf_ethnicity <- glm(AD_biomarker_status ~ raw_Ptau217_Lilly + geographic_region, data = d1_csf_k_fold, family = binomial())
+model_glm_csf_covariates <- glm(AD_biomarker_status ~ raw_Ptau217_Lilly + + age + sex + bmi + egfr, data = d1_csf_k_fold, family = binomial())
+model_glm_csf_full <- glm(AD_biomarker_status ~ raw_Ptau217_Lilly + geographic_region + age + sex + bmi + egfr, data = d1_csf_k_fold, family = binomial())
+
+summary(model_glm_csf_ptau_only)
+confint(model_glm_csf_ptau_only)
+pR2(model_glm_csf_ptau_only)
+
+summary(model_glm_csf_ethnicity)
+confint(model_glm_csf_ethnicity)
+pR2(model_glm_csf_ethnicity)
+
+summary(model_glm_csf_covariates)
+confint(model_glm_csf_covariates)
+pR2(model_glm_csf_covariates)
+
+summary(model_glm_csf_full)
+confint(model_glm_csf_full)
+pR2(model_glm_csf_full)
+
+print(cbind(exp(model_glm_csf_ptau_only$coefficients), exp(confint(model_glm_csf_ptau_only))))
+print(cbind(exp(model_glm_csf_ethnicity$coefficients), exp(confint(model_glm_csf_ethnicity))))
+print(cbind(exp(model_glm_csf_covariates$coefficients), exp(confint(model_glm_csf_covariates))))
+print(cbind(exp(model_glm_csf_full$coefficients), exp(confint(model_glm_csf_full))))
+
+
+set.seed(123)
+ctrl_biological <- trainControl(
+                     method="cv", 
+                     number = 5, 
+                     summaryFunction=twoClassSummary, 
+                     classProbs=TRUE,
+                     savePredictions = TRUE)
+model_csf_glm_k_fold_ptau_only <- train(AD_biomarker_status ~ raw_Ptau217_Lilly,
+               data = d1_csf_k_fold, 
+               method = "glm", 
+               family = binomial(), 
+               metric = "ROC",
+               trControl = ctrl_biological)
+model_csf_glm_k_fold_ethnicity <- train(AD_biomarker_status ~ raw_Ptau217_Lilly + geographic_region,
+               data = d1_csf_k_fold, 
+               method = "glm", 
+               family = binomial(), 
+               metric = "ROC",
+               trControl = ctrl_biological)
+model_csf_glm_k_fold_covariates <- train(AD_biomarker_status ~ raw_Ptau217_Lilly + age + sex + bmi + egfr,
+               data = d1_csf_k_fold, 
+               method = "glm", 
+               family = binomial(), 
+               metric = "ROC",
+               trControl = ctrl_biological)
+model_csf_glm_k_fold_full <- train(AD_biomarker_status ~ raw_Ptau217_Lilly + age + sex + bmi + egfr + geographic_region,
+               data = d1_csf_k_fold, 
+               method = "glm", 
+               family = binomial(), 
+               metric = "ROC",
+               trControl = ctrl_biological)
+
+print(model_csf_glm_k_fold_ptau_only,showSD=T)
+print(model_csf_glm_k_fold_ethnicity,showSD=T)
+print(model_csf_glm_k_fold_covariates,showSD=T)
+print(model_csf_glm_k_fold_full,showSD=T)
+
+
+roc_object_csf_k_fold_ptau_only <- roc(
+                 response = model_csf_glm_k_fold_ptau_only$pred$obs, 
+                 predictor = model_csf_glm_k_fold_ptau_only$pred$BIO_AD_Positive,
+                 levels = rev(levels(model_csf_glm_k_fold_ptau_only$pred$obs)))
+roc_object_csf_k_fold_ethnicity <- roc(
+                 response = model_csf_glm_k_fold_ethnicity$pred$obs, 
+                 predictor = model_csf_glm_k_fold_ethnicity$pred$BIO_AD_Positive,
+                 levels = rev(levels(model_csf_glm_k_fold_ethnicity$pred$obs)))
+roc_object_csf_k_fold_covariates <- roc(
+                 response = model_csf_glm_k_fold_covariates$pred$obs, 
+                 predictor = model_csf_glm_k_fold_covariates$pred$BIO_AD_Positive,
+                 levels = rev(levels(model_csf_glm_k_fold_covariates$pred$obs)))
+roc_object_csf_k_fold_full <- roc(
+                 response = model_csf_glm_k_fold_full$pred$obs, 
+                 predictor = model_csf_glm_k_fold_full$pred$BIO_AD_Positive,
+                 levels = rev(levels(model_csf_glm_k_fold_full$pred$obs)))
+
+#The AUC for each fold
+model_csf_glm_k_fold_ptau_only$resample$ROC
+model_csf_glm_k_fold_ethnicity$resample$ROC
+model_csf_glm_k_fold_covariates$resample$ROC
+model_csf_glm_k_fold_full$resample$ROC
+```
+
+################################################################ Preparing the AUC curves ################################################################
+```{r}
+library(tidyverse)
+#Funktioner
+aucci<-function(x) {
+  auc<-auc(x)
+  ci<- ci.auc(x)
+  plot(x, main = "ROC Curve", print.auc = TRUE)
+  return(list(AUC = auc, CI = ci))
+}
+
+process_roc <- function(roc_obj) {
+  data.frame(
+    FPR = 1 - roc_obj$specificities,
+    TPR = roc_obj$sensitivities
+  ) %>%
+    unique() %>%
+    arrange(FPR, TPR)
+}
+
+###########################
+options(scipen = 999)
+
+roc_base_data <- process_roc(roc_object_k_fold_ptau_only)
+roc_ethni_data <- process_roc(roc_object_k_fold_ethnicity)
+roc_covar_data <- process_roc(roc_object_k_fold_covariates)
+roc_full_data <- process_roc(roc_object_k_fold_full)
+
+auc_cli_base<-auc(roc_object_k_fold_ptau_only)
+auc_cli_ethni<-auc(roc_object_k_fold_ethnicity)
+auc_cli_covar<-auc(roc_object_k_fold_covariates)
+auc_cli_full<-auc(roc_object_k_fold_full)
+
+
+roc_clinical_data<-rbind(
+  data.frame(FPR = 100*roc_base_data$FPR, TPR = 100*roc_base_data$TPR, Model = "Base model"),
+  data.frame(FPR = 100*roc_ethni_data$FPR, TPR = 100*roc_ethni_data$TPR, Model = "Ethnicity model"),
+  data.frame(FPR = 100*roc_covar_data$FPR, TPR = 100*roc_covar_data$TPR, Model = "Covariate model"),
+  data.frame(FPR = 100*roc_full_data$FPR, TPR = 100*roc_full_data$TPR, Model = "Full model")
+)
+
+roc_clinical_data$Model <- factor(roc_clinical_data$Model, levels = c("Base model",
+                                                      "Ethnicity model",
+                                                      "Covariate model",
+                                                      "Full model"))
+
+AUC_clinical_plot<-ggplot(roc_clinical_data, aes(x = FPR, y = TPR, color = Model)) +
+  geom_step(linewidth = 1.2) +
+  geom_abline(slope = 1, intercept = 0, linetype = "dotted", color = "black", size = 0.8) +
+  scale_color_manual(values = c("Base model" = "#999999",
+                                "Ethnicity model" = "#E69F00",
+                                "Covariate model" = "#56B4E9", 
+                                "Full model" = "#009E73"),
+                     labels = c("Base model: p-tau217",
+                                "Ethnicity model: p-tau217 + geographic origin",
+                                "Covariate model: p-tau217 + age + sex + eGFR + BMI",
+                                "Full model: p-tau217 + age + sex + eGFR + BMI + geographic origin")) +
+  theme_classic() +
+  theme(
+    plot.title = element_text(family = "serif", size = 20, face = "bold", hjust = 0.5),
+    axis.title.x = element_text(family = "serif", size = 14),
+    axis.title.y = element_text(family = "serif", size = 14)) +
+  labs(title = "AUROC: Full cohort [10-fold]", x = "100-Specificity", y = "Sensitivity") +
+    theme(legend.position = "bottom", legend.title = element_blank(), legend.box = "horizontal", legend.text = element_text(size=12)) +
+  guides(color = guide_legend(nrow=2)) +
+    annotate("segment", x = 40, xend = 43, y = 35, yend = 35, color = "#999999", size = 2) +
+  annotate("text", x = 45, y = 35, label = sprintf("Base model: AUC: %.3f (SD: 0.037)", auc_cli_base), color = "black", hjust = 0, family = "serif", size = 7) +
+    annotate("segment", x = 40, xend = 43, y = 25, yend = 25, color = "#E69F00", size = 2) +
+  annotate("text", x = 45, y = 25, label = sprintf("Ethnicity model: AUC: %.3f (SD: 0.035)",auc_cli_ethni), color = "black", hjust = 0, 
+           family = "serif", size = 7) +
+    annotate("segment", x = 40, xend = 43, y = 15, yend = 15, color = "#56B4E9", size = 2) +
+  annotate("text", x = 45, y = 15, label = sprintf("Covariate model: AUC: %.3f (SD: 0.031)",auc_cli_covar), color = "black", hjust = 0, 
+           family = "serif", size = 7) +
+    annotate("segment", x = 40, xend = 43, y = 5, yend = 5, color = "#009E73", size = 2) +
+  annotate("text", x = 45, y = 5, label = sprintf("Full model: AUC: %.3f (SD: 0.041)",auc_cli_full), color = "black", 
+           hjust = 0, family = "serif", size = 7)
+
+
+
+#CSF group
+roc_csf_base_data <- process_roc(roc_object_csf_k_fold_ptau_only)
+roc_csf_ethni_data <- process_roc(roc_object_csf_k_fold_ethnicity)
+roc_csf_covar_data <- process_roc(roc_object_csf_k_fold_covariates)
+roc_csf_full_data <- process_roc(roc_object_csf_k_fold_full)
+
+auc_csf_base<-auc(roc_object_csf_k_fold_ptau_only)
+auc_csf_ethni<-auc(roc_object_csf_k_fold_ethnicity)
+auc_csf_covar<-auc(roc_object_csf_k_fold_covariates)
+auc_csf_full<-auc(roc_object_csf_k_fold_full)
+
+
+roc_csf_data<-rbind(
+  data.frame(FPR = 100*roc_csf_base_data$FPR, TPR = 100*roc_csf_base_data$TPR, Model = "Base model"),
+  data.frame(FPR = 100*roc_csf_ethni_data$FPR, TPR = 100*roc_csf_ethni_data$TPR, Model = "Ethnicity model"),
+  data.frame(FPR = 100*roc_csf_covar_data$FPR, TPR = 100*roc_csf_covar_data$TPR, Model = "Covariate model"),
+  data.frame(FPR = 100*roc_csf_full_data$FPR, TPR = 100*roc_csf_full_data$TPR, Model = "Full model")
+)
+
+roc_csf_data$Model <- factor(roc_csf_data$Model, levels = c("Base model",
+                                                      "Ethnicity model",
+                                                      "Covariate model",
+                                                      "Full model"))
+
+AUC_csf_plot<-ggplot(roc_csf_data, aes(x = FPR, y = TPR, color = Model)) +
+  geom_step(linewidth = 1.2) +
+  geom_abline(slope = 1, intercept = 0, linetype = "dotted", color = "black", size = 0.8) +
+  scale_color_manual(values = c("Base model" = "#999999",
+                                "Ethnicity model" = "#E69F00",
+                                "Covariate model" = "#56B4E9", 
+                                "Full model" = "#009E73"),
+                     labels = c("Base model: p-tau217",
+                                "Ethnicity model: p-tau217 + geographic origin",
+                                "Covariate model: p-tau217 + age + sex + eGFR + BMI",
+                                "Full model: p-tau217 + age + sex + eGFR + BMI + geographic origin")) +
+  theme_classic() +
+  theme(
+    plot.title = element_text(family = "serif", size = 20, face = "bold", hjust = 0.5),
+    axis.title.x = element_text(family = "serif", size = 14),
+    axis.title.y = element_text(family = "serif", size = 14)) +
+  labs(title = "AUROC: CSF/Aβ-PET examined cohort [5-fold]", x = "100-Specificity", y = "Sensitivity") +
+  theme(legend.position = "bottom", legend.title = element_blank(), legend.box = "horizontal", legend.text = element_text(size=12)) +
+  guides(color = guide_legend(nrow=2)) +
+    annotate("segment", x = 40, xend = 43, y = 35, yend = 35, color = "#999999", size = 2) +
+  annotate("text", x = 45, y = 35, label = sprintf("Base model: AUC: %.3f (SD: 0.022)", auc_csf_base), color = "black", hjust = 0, family = "serif", size = 7) +
+    annotate("segment", x = 40, xend = 43, y = 25, yend = 25, color = "#E69F00", size = 2) +
+  annotate("text", x = 45, y = 25, label = sprintf("Ethnicity model: AUC: %.3f (SD: 0.018)",auc_csf_ethni), color = "black", hjust = 0, 
+           family = "serif", size = 7) +
+    annotate("segment", x = 40, xend = 43, y = 15, yend = 15, color = "#56B4E9", size = 2) +
+  annotate("text", x = 45, y = 15, label = sprintf("Covariate model: AUC: %.3f (SD: 0.042)",auc_csf_covar), color = "black", hjust = 0, 
+           family = "serif", size = 7) +
+    annotate("segment", x = 40, xend = 43, y = 5, yend = 5, color = "#009E73", size = 2) +
+  annotate("text", x = 45, y = 5, label = sprintf("Full model: AUC: %.3f (SD: 0.052)",auc_csf_full), color = "black", 
+           hjust = 0, family = "serif", size = 7)
+```
+
+# **Figure 2** **Figure 3**
+```{r,fig.width=10,fig.height=10}
+AUC_clinical_plot
+
+AUC_csf_plot
+```
+
+
+```{r}
+ ################################################################ CLINICAL comparison ################################################################
+roc.test(roc_object_k_fold_ptau_only, roc_object_k_fold_ethnicity, method = "delong") 
+roc.test(roc_object_k_fold_ptau_only, roc_object_k_fold_covariates, method = "delong")                                                            
+roc.test(roc_object_k_fold_ptau_only, roc_object_k_fold_full, method = "delong") 
+roc.test(roc_object_k_fold_ethnicity, roc_object_k_fold_covariates, method = "delong")                                                            
+roc.test(roc_object_k_fold_ethnicity, roc_object_k_fold_full, method = "delong")                                                              
+roc.test(roc_object_k_fold_covariates, roc_object_k_fold_full, method = "delong") 
+#BIO comparison
+roc.test(roc_object_csf_k_fold_ptau_only, roc_object_csf_k_fold_ethnicity, method = "delong") 
+roc.test(roc_object_csf_k_fold_ptau_only, roc_object_csf_k_fold_covariates, method = "delong")                                                            
+roc.test(roc_object_csf_k_fold_ptau_only, roc_object_csf_k_fold_full, method = "delong") 
+roc.test(roc_object_csf_k_fold_ethnicity, roc_object_csf_k_fold_covariates, method = "delong")                                                            
+roc.test(roc_object_csf_k_fold_ethnicity, roc_object_csf_k_fold_full, method = "delong")                                                              
+roc.test(roc_object_csf_k_fold_covariates, roc_object_csf_k_fold_full, method = "delong") 
+
+#youden
+coords(roc_object_k_fold_ptau_only, "best", ret="all", transpose = FALSE, best.method="youden") 
+coords(roc_object_k_fold_ethnicity, "best", ret="all", transpose = FALSE, best.method="youden") 
+coords(roc_object_k_fold_covariates, "best", ret="all", transpose = FALSE, best.method="youden") 
+coords(roc_object_k_fold_full, "best", ret="all", transpose = FALSE, best.method="youden") 
+
+coords(roc_object_csf_k_fold_ptau_only, "best", ret="all", transpose = FALSE, best.method="youden") 
+coords(roc_object_csf_k_fold_ethnicity, "best", ret="all", transpose = FALSE, best.method="youden")
+coords(roc_object_csf_k_fold_covariates, "best", ret="all", transpose = FALSE, best.method="youden")
+coords(roc_object_csf_k_fold_full, "best", ret="all", transpose = FALSE, best.method="youden") 
+```
+
+
+################################################################ [K-fold] CSF/Amyloid-PET subanalyses **Supplementary Table 6** ################################################################
+```{r}
+amyloid_cohort <- subset(d1_csf, amyloid_pet == "normal" | amyloid_pet == "abnormal") 
+elecsys_cohort <- subset(d1_csf, assay_change_group == "ElecsysVersion2")
+  elecsys_cohort <- anti_join(elecsys_cohort, amyloid_cohort, by = "record_id")
+innotest_cohort <- subset(d1_csf, assay_change_group == "InnotestELISA")
+  innotest_cohort <- anti_join(innotest_cohort, amyloid_cohort, by = "record_id")
+lumipulse_cohort <- subset(d1_csf, assay_change_group == "Lumipulse")
+  lumipulse_cohort <- anti_join(lumipulse_cohort, amyloid_cohort, by = "record_id")
+MSD_cohort <- subset(d1_csf, assay_change_group == "MSDAssay")
+  MSD_cohort <- anti_join(MSD_cohort, amyloid_cohort, by = "record_id")
+
+
+
+summary(tableby( ~ AD_biomarker_status + geographic_region, data=amyloid_cohort, control = median_settings))
+summary(tableby( ~ AD_biomarker_status + geographic_region, data=elecsys_cohort, control = median_settings))
+summary(tableby( ~ AD_biomarker_status + geographic_region, data=innotest_cohort, control = median_settings))
+summary(tableby( ~ AD_biomarker_status + geographic_region, data=lumipulse_cohort, control = median_settings))
+summary(tableby( ~ AD_biomarker_status + geographic_region, data=MSD_cohort, control = median_settings))
+
+
+set.seed(123)
+ctrl_biomarker <- trainControl(
+                     method="cv", 
+                     number = 5, 
+                     summaryFunction=twoClassSummary, 
+                     classProbs=TRUE,
+                     savePredictions = TRUE)
+model_k_fold_PET <- train(AD_biomarker_status ~ raw_Ptau217_Lilly,
+               data = amyloid_cohort, 
+               method = "glm", 
+               family = binomial(), 
+               metric = "ROC",
+               trControl = ctrl_biomarker)
+model_k_fold_elecsys <- train(AD_biomarker_status ~ raw_Ptau217_Lilly,
+               data = elecsys_cohort, 
+               method = "glm", 
+               family = binomial(), 
+               metric = "ROC",
+               trControl = ctrl_biomarker)
+model_k_fold_innotest <- train(AD_biomarker_status ~ raw_Ptau217_Lilly,
+               data = innotest_cohort, 
+               method = "glm", 
+               family = binomial(), 
+               metric = "ROC",
+               trControl = ctrl_biomarker)
+model_k_fold_lumipulse <- train(AD_biomarker_status ~ raw_Ptau217_Lilly,
+               data = lumipulse_cohort, 
+               method = "glm", 
+               family = binomial(), 
+               metric = "ROC",
+               trControl = ctrl_biomarker)
+model_k_fold_MSD <- train(AD_biomarker_status ~ raw_Ptau217_Lilly,
+               data = MSD_cohort, 
+               method = "glm", 
+               family = binomial(), 
+               metric = "ROC",
+               trControl = ctrl_biomarker)
+
+print(model_k_fold_PET,showSD=T)
+print(model_k_fold_elecsys,showSD=T)
+print(model_k_fold_innotest,showSD=T)
+print(model_k_fold_lumipulse,showSD=T)
+print(model_k_fold_MSD,showSD=T)
+
+
+roc_amyloid_PET <- roc(
+                 response = model_k_fold_PET$pred$obs, 
+                 predictor = model_k_fold_PET$pred$BIO_AD_Positive,
+                 levels = rev(levels(model_k_fold_PET$pred$obs)))
+roc_elecsys <- roc(
+                 response = model_k_fold_elecsys$pred$obs, 
+                 predictor = model_k_fold_elecsys$pred$BIO_AD_Positive,
+                 levels = rev(levels(model_k_fold_elecsys)))
+roc_innotest <- roc(
+                 response = model_k_fold_innotest$pred$obs, 
+                 predictor = model_k_fold_innotest$pred$BIO_AD_Positive,
+                 levels = rev(levels(model_k_fold_innotest$pred$obs)))
+roc_lumipulse <- roc(
+                 response = model_k_fold_lumipulse$pred$obs, 
+                 predictor = model_k_fold_lumipulse$pred$BIO_AD_Positive,
+                 levels = rev(levels(model_k_fold_lumipulse$pred$obs)))
+roc_msd <- roc(
+                 response = model_k_fold_MSD$pred$obs, 
+                 predictor = model_k_fold_MSD$pred$BIO_AD_Positive,
+                 levels = rev(levels(model_k_fold_MSD$pred$obs)))
+
+roc.test(roc_amyloid_PET, roc_elecsys, method = "delong") 
+roc.test(roc_amyloid_PET, roc_innotest, method = "delong") 
+roc.test(roc_amyloid_PET, roc_lumipulse, method = "delong") 
+roc.test(roc_amyloid_PET, roc_msd, method = "delong") 
+
+roc.test(roc_elecsys, roc_innotest, method = "delong") 
+roc.test(roc_elecsys, roc_lumipulse, method = "delong") 
+roc.test(roc_elecsys, roc_msd, method = "delong") 
+
+roc.test(roc_innotest, roc_lumipulse, method = "delong") 
+roc.test(roc_innotest, roc_msd, method = "delong") 
+
+roc.test(roc_lumipulse, roc_msd, method = "delong") 
+
+
+
+roc_amyloid_PET_data <- process_roc(roc_amyloid_PET)
+roc_elecsys_data <- process_roc(roc_elecsys)
+roc_innotest_data <- process_roc(roc_innotest)
+roc_lumipulse_data <- process_roc(roc_lumipulse)
+roc_msd_data <- process_roc(roc_msd)
+
+auc_amyloid_PET<-auc(roc_amyloid_PET)
+auc_elecsys<-auc(roc_elecsys)
+auc_innotest<-auc(roc_innotest)
+auc_lumipulse<-auc(roc_lumipulse)
+auc_msd<-auc(roc_msd)
+
+
+roc_assays_data<-rbind(
+  data.frame(FPR = 100*roc_amyloid_PET_data$FPR, TPR = 100*roc_amyloid_PET_data$TPR, Model = "Amyloid-PET"),
+  data.frame(FPR = 100*roc_elecsys_data$FPR, TPR = 100*roc_elecsys_data$TPR, Model = "Elecsys"),
+  data.frame(FPR = 100*roc_innotest_data$FPR, TPR = 100*roc_innotest_data$TPR, Model = "Innotest"),
+  data.frame(FPR = 100*roc_lumipulse_data$FPR, TPR = 100*roc_lumipulse_data$TPR, Model = "Lumipulse"),
+  data.frame(FPR = 100*roc_msd_data$FPR, TPR = 100*roc_msd_data$TPR, Model = "MSD")
+)
+
+roc_assays_data$Model <- factor(roc_assays_data$Model, levels = c("Amyloid-PET",
+                                                      "Elecsys",
+                                                      "Innotest",
+                                                      "Lumipulse",
+                                                      "MSD"))
+
+AUC_assay_plot<-ggplot(roc_assays_data, aes(x = FPR, y = TPR, color = Model)) +
+  geom_step(linewidth = 1.2) +
+  geom_abline(slope = 1, intercept = 0, linetype = "dotted", color = "black", size = 0.8) +
+  scale_color_manual(values = c("Amyloid-PET" = "#999999",
+                                "Elecsys" = "#E69F00",
+                                "Innotest" = "#56B4E9", 
+                                "Lumipulse" = "#009E73",
+                                "MSD" = "#CC79A7")) +
+  theme_classic() +
+  theme(
+    plot.title = element_text(family = "serif", size = 20, face = "bold", hjust = 0.5),
+    axis.title.x = element_text(family = "serif", size = 14),
+    axis.title.y = element_text(family = "serif", size = 14)) +
+  labs(title = "AUROC: By individual assay [5-fold]", x = "100-Specificity", y = "Sensitivity") +
+  theme(legend.position = "none") +
+    annotate("segment", x = 45, xend = 48, y = 45, yend = 45, color = "#999999", size = 2) +
+  annotate("text", x = 50, y = 45, label = sprintf("Amyloid-PET: AUC: %.3f (SD: 0.063)", auc_amyloid_PET), color = "black", hjust = 0, family = "serif", size = 5) +
+    annotate("segment", x = 45, xend = 48, y = 35, yend = 35, color = "#E69F00", size = 2) +
+  annotate("text", x = 50, y = 35, label = sprintf("Elecsys: AUC: %.3f (SD: 0.045)",auc_elecsys), color = "black", hjust = 0, family = "serif", size = 5) +
+    annotate("segment", x = 45, xend = 48, y = 25, yend = 25, color = "#56B4E9", size = 2) +
+  annotate("text", x = 50, y = 25, label = sprintf("Innotest model: AUC: %.3f (SD: 0.051)",auc_innotest), color = "black", hjust = 0, family = "serif", size = 5) +
+    annotate("segment", x = 45, xend = 48, y = 15, yend = 15, color = "#009E73", size = 2) +
+  annotate("text", x = 50, y = 15, label = sprintf("Lumipulse: AUC: %.3f (SD: 0.036)",auc_lumipulse), color = "black", hjust = 0, family = "serif", size = 5) + 
+    annotate("segment", x = 45, xend = 48, y = 5, yend = 5, color = "#CC79A7", size = 2) +
+  annotate("text", x = 50, y = 5, label = sprintf("MSD: AUC: %.3f (SD: 0.206)", auc_msd), color = "black", hjust = 0, family = "serif", size = 5)
+```
+```{r,fig.width=10,fig.height=10}
+AUC_assay_plot
+```
+
+
+################################################################# Diagnostic techniques used per group  **Supplementary Table 7** ################################################################
+```{r}
+summary(tableby(minority_majority ~ AD_biomarker_status, data=d1_csf, control = median_settings))
+summary(tableby(geographic_region ~ AD_biomarker_status, data=d1_csf, control = median_settings))
+
+summary(tableby(minority_majority ~ mta + gca + fazeka, data=d1, control = median_settings))
+summary(tableby(geographic_region ~ mta + gca + fazeka, data=d1, control = median_settings))
+
+```
+
+################################################################# Characteristics by memory clinic  **Supplementary Table 8** ################################################################
+```{r}
+summary(tableby(Center ~ age + sex + education, data=d1, control = mean_settings))
+summary(tableby(Center ~ geographic_region, data=d1, control = median_settings))
+summary(tableby(Center ~ dementia_type, data=d1, control = median_settings))
+summary(tableby(Center ~ bmi + egfr + alat + hba1c + tsh + diseases_per_pt, data=d1, control = median_settings))
+
+summary(tableby(Center ~ AD_biomarker_status, data=d1_csf, control = median_settings))
+summary(tableby(Center ~ csf_ab42 + csf_ptau181 + csf_ttau, data=d1, control = median_settings))
+summary(tableby(Center ~ mta + gca + fazeka, data=d1, control = median_settings))
+```
+
+
+################################################################# Plot to display prevalence rates... ################################################################
+```{r}
+library(ggplot2)
+library(arsenal)
+d1_no_NA <- subset(d1, geographic_region != "NA")
+d1_csf_no_NA <- subset(d1_csf, geographic_region != "NA")
+
+ggplot(d1_no_NA, aes(x= interaction(geographic_region, AD_clinical_status), y = raw_Ptau217_Lilly, color = AD_clinical_status)) + 
+  geom_boxplot(outlier.shape = NA, alpha = 0.5) +
+    scale_fill_manual(values = c("#E69F00", "#56B4E9")) +
+  scale_color_manual(values = c("#E69F00", "#56B4E9")) +
+  geom_jitter(position = position_jitter(width = 0.2), size = 1, alpha = 0.7) +
+  labs(x = "Ethnicity and AD status", y = "Plasma Ptau217", title = "Plasma ptau217 by ethnicity (Full cohort)") + 
+  scale_x_discrete(labels = c("DK.CLI_AD_negative" = "DK: Aβ-", "DK.CLI_AD_positive" = "DK: Aβ+", 
+                              "Africa.CLI_AD_negative" = "Africa: Aβ-", "Africa.CLI_AD_positive" = "Africa: Aβ+", 
+                              "Europe.CLI_AD_negative" = "Europe: Aβ-", "Europe.CLI_AD_positive" = "Europe: Aβ+",
+                              "Mid_east.CLI_AD_negative" = "Middle East: Aβ-", "Mid_east.CLI_AD_positive" = "Middle East: Aβ+"))+
+  theme_minimal()+
+  theme(legend.position = "none")  
+
+
+ggplot(d1_csf_no_NA, aes(x= interaction(geographic_region, AD_biomarker_status), y = raw_Ptau217_Lilly, color = AD_biomarker_status)) + 
+  geom_boxplot(outlier.shape = NA, alpha = 0.5) +
+      scale_fill_manual(values = c("#E69F00", "#56B4E9")) +
+  scale_color_manual(values = c("#E69F00", "#56B4E9")) +
+  geom_jitter(position = position_jitter(width = 0.2), size = 1, alpha = 0.7) +
+  labs(x = "Ethnicity and AD status", y = "Plasma Ptau217", title = "Plasma ptau217 by ethnicity (CSF/Aβ-PET)") + 
+  scale_x_discrete(labels = c("DK.BIO_AD_Negative" = "DK: Aβ-", "DK.BIO_AD_Positive" = "DK: Aβ+", 
+                              "Africa.BIO_AD_Negative" = "Africa: Aβ-", "Africa.BIO_AD_Positive" = "Africa: Aβ+", 
+                              "Europe.BIO_AD_Negative" = "Europe: Aβ-", "Europe.BIO_AD_Positive" = "Europe: Aβ+",
+                              "Mid_east.BIO_AD_Negative" = "Middle East: Aβ-", "Mid_east.BIO_AD_Positive" = "Middle East: Aβ+"))+
+  theme_minimal()+
+  theme(legend.position = "none")  
+  theme_minimal()
+
+
+  
+#Comparative statistics
+CLI_AB_NEG <- subset(d1, AD_clinical_status == "CLI_AD_negative")
+CLI_AB_POS <- subset(d1, AD_clinical_status == "CLI_AD_positive")
+BIO_AB_NEG <- subset(d1_csf, AD_biomarker_status == "BIO_AD_Negative")
+BIO_AB_POS <- subset(d1_csf, AD_biomarker_status == "BIO_AD_Positive")
+summary(tableby(geographic_region ~ raw_Ptau217_Lilly, data=CLI_AB_NEG, control = median_settings))
+summary(tableby(geographic_region ~ raw_Ptau217_Lilly, data=CLI_AB_POS, control = median_settings))
+summary(tableby(geographic_region ~ raw_Ptau217_Lilly, data=BIO_AB_NEG, control = median_settings))
+summary(tableby(geographic_region ~ raw_Ptau217_Lilly, data=BIO_AB_POS, control = median_settings))
 ```
