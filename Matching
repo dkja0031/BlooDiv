@@ -9,15 +9,18 @@ output: html_document
 knitr::opts_chunk$set(echo = TRUE, warning = FALSE,message = F)
 ```
 
-## Matching the minorityethnic cohort with a majority cohort
+This script demonstrates the matching approach for the BlooDiv study carried out at the Danish Dementia Research Centre by Daniel Kjaergaard. 
+The matching has two phases - one matching minority ethnic patients from Copenhagen, and the second matching minority ethnic patients from Malmö, Sweden
+For data- and ethical purposes the dataframe and the filepath is not disclosed.
 
-We are matching using the package 'MatchIt'. This will be executed by 1-to-1 matching 
-nearest neighbor propensity score matching on age and gender.
+
+
+###### ROUND 1 - Only Copenhagen University Hospital patients ########
+## Matching the minority ethnic cohort with a majority ethnic cohort
+We are matching using the package 'MatchIt'. This will be executed by 1-to-1 matching nearest neighbor propensity score matching on age and gender.
 
 There are 461 minority ethnic patients included.
-
 There are 4863 potentially majority ethnic patients.
-
 At baseline the groups differ on age but not on gender
 
 ```{r}
@@ -43,7 +46,6 @@ chi_result
 ```
 
 ## The actual matching below
-
 ```{r}
 m.out1 <- matchit(Minority ~ AgeAtVisit + Gender, data = d_matching,
                   method = "nearest", distance = "glm")
@@ -51,25 +53,18 @@ m.out1
 ```
 
 ## Examine success of matching
-
 We see that the standardized means differences and eCDF are all below 0.1 indicating a successful matching
-
 ```{r}
-
 summary(m.out1, un = FALSE)
 ```
-
 
 ## Plots to demonstrate the sucess of the matching
 ```{r}
 plot(m.out1, type = "jitter", interactive = FALSE)
-
 plot(summary(m.out1))
-
 plot(m.out1, type = "density", interactive = FALSE,
      which.xs = ~AgeAtVisit + Gender)
 ```
-
 
 ## Define new dataframe with matched patients
 ```{r}
@@ -82,6 +77,7 @@ matched_data <- matched_data[-c(2:3, 12:22)]
 library(writexl)
 write_xlsx(matched_data, "FILE_PATH.xlsx")
 ```
+
 ############################################################################
 # MATCHING ROUND 2 (REMAINING 65 PATIENTS)
 # I have excluded the danish patients matched in the first round 
