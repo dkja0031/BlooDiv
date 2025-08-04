@@ -27,14 +27,6 @@ library(pscl)
 d1$sex <- as.factor(d1$sex)
   levels(d1$sex) <- c("female", "male")
 
-d1$primary_language <- as.factor(d1$primary_language)
-
-d1$interpreter <- as.factor(d1$interpreter)
-  levels(d1$interpreter) <- c("Yes", "No")
-  
-d1$interpreter_type <- as.factor(d1$interpreter_type)
-  levels(d1$interpreter_type) <- c("Professional", "Informal")
-  
 d1$cognitive_status <- as.factor(d1$cognitive_status)
   levels(d1$cognitive_status) <- c("NCI", "MCI", "Mild dementia", "moderate dementia", "severe dementia", "mild-severe psychiatric", "undecided", "SCD")
   d1$cognitive_status <- fct_collapse(d1$cognitive_status, SCD = c("NCI", "SCD"))
@@ -46,6 +38,10 @@ d1$dementia_type <- as.factor(d1$dementia_type)
   
 d1$unknown <- as.factor(d1$dementia_other_description == "Unknown")
   levels(d1$unknown) <- c("Specified", "Unspecified")
+
+d1$raw_Ptau217_Lilly <- as.numeric(d1$raw_Ptau217_Lilly)
+d1$Norm_Low_ptau217_Lilly <- as.numeric(d1$Norm_Low_ptau217_Lilly)
+d1$Norm_High_ptau217_Lilly <- as.numeric(d1$Norm_High_ptau217_Lilly)
 
 d1$log_ptau217_raw <- log(d1$raw_Ptau217_Lilly)
 d1$log_ptau217_Norm_Low <- log(d1$Norm_Low_ptau217_Lilly)
@@ -62,21 +58,6 @@ d1$norm_high_ptau217_cutoff <- cut(d1$Norm_High_ptau217_Lilly,
   
 d1["mce_total"][d1["mce_total"] == 0] <- NA
 d1$rpt_learning[d1$Center == "Danish Dementia Biobank"] <- d1$rpt_learning[d1$Center == "Danish Dementia Biobank"] / 3
-
-d1$diabetes <- ifelse(d1$diabetes == 2, 0, 1)
-d1$hypertension <- ifelse(d1$hypertension == 2, 0, 1)
-d1$hyperchol <- ifelse(d1$hyperchol == 2, 0, 1) 
-d1$stroke <- ifelse(d1$stroke == 2, 0, 1) 
-d1$thyroid_disease <- ifelse(d1$thyroid_kidney_liver_disease == 2, 0, 1)
-  d1 <- subset(d1, select=-(thyroid_kidney_liver_disease))
-d1$kidney_disease <- ifelse(d1$kidney_disease == 2, 0, 1)
-d1$liver_disease <- ifelse(d1$liver_disease == 2, 0, 1)
-d1$ihd <- ifelse(d1$ihd == 2, 0, 1)
-d1$afli <- ifelse(d1$afli == 2, 0, 1) 
-d1$depression <- ifelse(d1$depression == 2, 0, 1) 
-d1$neuropathy <- ifelse(d1$neuropathy == 2, 0, 1) 
-d1$head_trauma <- ifelse(d1$head_trauma == 2, 0, 1) 
-d1$sleep_disorder <- ifelse(d1$sleep_disorder == 2, 0, 1)
 
 d1$csf_ab42 <- as.factor(d1$csf_ab42)
   levels(d1$csf_ab42) <- c("normal", "abnormal")
@@ -142,69 +123,9 @@ d1$AD_clinical_status <- fct_collapse(d1$AD_clinical_status, CLI_AD_positive = c
 d1$AD_clinical_status <- fct_collapse(d1$AD_clinical_status, CLI_AD_negative = c("Unknown", "Non_neurological", "Non_AD"))
 d1$AD_clinical_status <- relevel(d1$AD_clinical_status, ref = "CLI_AD_negative")   
 
-
-d1$alat [d1$Center == "Memory Clinic Malmö"] <- d1$alat [d1$Center == "Memory Clinic Malmö"] * 60
-d1$hba1c [d1$Center == "Danish Dementia Biobank"] <- (d1$hba1c [d1$Center == "Danish Dementia Biobank"] - 0.8285) / 0.1455
-
-d1$bmi_categorical   <- cut(d1$bmi,
-                            breaks=c(0,18.5,24.9, 29.9,100),
-                            labels=c('underweight', 'normal', 'overweight', 'obesity'))
-  d1$bmi_categorical <- relevel(d1$bmi_categorical, ref = "normal")   
-
-
-d1$creatinine_categorical <- ifelse(d1$sex == "female",
-                                    cut(d1$creatinine, breaks = c(0, 90, Inf), labels = c("normal", "abnormal")),
-                                    cut(d1$creatinine, breaks = c(0, 105, Inf), labels = c("normal", "abnormal")))
-                            d1$creatinine_categorical <- as.factor(d1$creatinine_categorical)
-                            levels(d1$creatinine_categorical) <- c("normal", "abnormal")
-
-d1$functional_KD   <- cut(d1$egfr,
-                               breaks=c(0,60,100),
-                               labels=c('KD_abnormal', 'KD_normal'))
-  d1$functional_KD <- relevel(d1$functional_KD, ref = "KD_normal")   
-
-
-d1$alat_categorical <- ifelse(d1$sex == "female",
-                                    cut(d1$alat, breaks = c(0, 10, 45, Inf), labels = c("alt_low", "alt_normal", "alt_abnormal")),
-                                    cut(d1$alat, breaks = c(0, 10, 70, Inf), labels = c("alt_low", "alt_normal", "alt_abnormal")))
-                            d1$alat_categorical <- as.factor(d1$alat_categorical)
-                            levels(d1$alat_categorical) <- c("alt_low", "alt_normal", "alt_abnormal")
-                              d1$alat_categorical <- relevel(d1$alat_categorical, ref = "alt_normal")   
-
-
-
-d1$hba1c_categorical   <- cut(d1$hba1c,
-                             breaks=c(0,48,Inf),
-                             labels=c('normal', 'high'))
-
-d1$tsh_categorical   <- cut(d1$tsh,
-                           breaks=c(0,0.3,4.5,Inf),
-                           labels=c('low', 'normal', 'high'))
-
-d1$diseases_per_pt <- (d1$diabetes + d1$hypertension + d1$hyperchol +
-                                  d1$stroke + d1$thyroid_disease + d1$kidney_disease +
-                                  d1$liver_disease + d1$ihd + d1$afli + d1$depression +
-                                  d1$neuropathy + d1$head_trauma + d1$sleep_disorder)
-d1$diseases_per_pt <- cut(d1$diseases_per_pt,
-                          breaks=c(-Inf,1,3,6),
-                          labels=c('cormor_0-1', 'cormor_2-3', 'cormor_4-6'))
-
-d1$rpt_recognition_categorical   <- cut(d1$rpt_recognition,
-                             breaks=c(0,8.5,10.5),
-                             labels=c('impaired', 'normal'))
-
-
 d1$date_only_year <- substr(d1$date, start = 1, stop = 4)
 d1$date_only_year <- as.numeric(d1$date_only_year)
 d1$years_in_dk <- d1$date_only_year - d1$immigration_year
-
-#adjusted MCE score from original MCE validation study (Nielsen et al.)
-d1$adjusted_mce <- (d1$mce_total - (0.792*d1$education) + (0.324*d1$age))
-
-#cutoff for adjusted mce score from Nielsen et al.,
-d1$adjusted_mce_cutoff   <- cut(d1$adjusted_mce,
-                             breaks=c(0,77.5,Inf),
-                             labels=c('Impaired', 'Unimpaired'))
 
 d1 <- subset(d1, minority_majority!=1)
 d1_mce <- subset(d1, mce_total > 0)
@@ -212,7 +133,7 @@ d1_mce <- subset(d1_mce, cognitive_status != "undecided")
 d1_mce$cognitive_status <- droplevels(d1_mce$cognitive_status)
 ```
 
-### **TABLE 1**
+### **TABLE 1** - Descriptive Table
 ```{r, warning=FALSE}
 Table_1 <-
   tbl_summary(
@@ -251,7 +172,7 @@ Table_1
 ```
 
 
-### Create dataframe with patients with CSF
+### **Table 2** - Descriptive Table of CSF/AB-PET examined patients
 ```{r}
 d1_mce_csf <- subset(d1_mce, csf_ab42 == "normal" | csf_ab42 == "abnormal" |
                    csf_ptau181 == "normal" | csf_ptau181 == "abnormal" |
@@ -362,70 +283,51 @@ CSF_table
 ```
 
 
-# Correlation between ptau217 and cognitive tests
-```{r}
-library(corrplot)
-library(Hmisc)
-d1_tests <- data.frame(    'P-tau217' = d1_mce$log_ptau217_Norm_High,
-                           'MCE' = d1_mce$mce_total, 
-                           'RPT learning' = d1_mce$rpt_learning,
-                           'RPT recall' = d1_mce$rpt_recall,
-                           'RPT recognition' = d1_mce$rpt_recognition,
-                           'CRT' = d1_mce$crt,
-                           'SFT' = d1_mce$supermarket_fluency)
 
-d1_cor <- cor(d1_tests, method ="spearman")
-
-corrplot(d1_cor, 
-               method = "color", 
-               type = "upper",
-               tl.cex = 0.8,
-               tl.col = "black",
-               addCoef.col = "black",
-               order = c("original"),
-               tl.srt = 35)
-
-
-# Extract correlation p-values
-cor_results <- rcorr(as.matrix(d1_cor))
-cor_matrix <- cor_results$r
-p_matrix <- cor_results$P
-print(p_matrix)
-```
-
-#Model selection
+# Table 3 - logistic regression
 ```{r}
 options(scipen = 999)
+d1_mce
 
-#Multiple regression models (AD as outcome)
 #Models Without ptau
-model_glm_mce <- glm(AD_clinical_status ~ scale(rudas_total) + scale(rpt_learning) + scale(rpt_recall) + scale(rpt_recognition) + scale(crt) + scale(supermarket_fluency) + scale(age) + scale(education), data = d1_mce, family = binomial())
+## MCE-model with full-scale MCE
+model_glm_mce <- glm(AD_clinical_status ~ scale(mce_total) + scale(age) + scale(education), data = d1_mce, family = binomial())
 summary(model_glm_mce) 
 confint(model_glm_mce)
 pR2(model_glm_mce) 
 print(cbind(exp(model_glm_mce$coefficients), exp(confint(model_glm_mce))))
 
-model_glm_mce_reduced <- glm(AD_clinical_status ~ scale(rpt_recall) + scale(age) + scale(education), data = d1_mce, family = binomial())
-summary(model_glm_mce_reduced) 
-confint(model_glm_mce_reduced)
-pR2(model_glm_mce_reduced) 
-print(cbind(exp(model_glm_mce_reduced$coefficients), exp(confint(model_glm_mce_reduced))))
+## Subtests-model with MCE subtests
+model_glm_mce_subtests <- glm(AD_clinical_status ~ scale(rudas_total) + scale(rpt_learning) + scale(rpt_recall) + scale(rpt_recognition) + scale(crt) + scale(supermarket_fluency) + scale(age) + scale(education), data = d1_mce, family = binomial())
+summary(model_glm_mce_subtests) 
+confint(model_glm_mce_subtests)
+pR2(model_glm_mce_subtests) 
+print(cbind(exp(model_glm_mce_subtests$coefficients), exp(confint(model_glm_mce_subtests))))
 
-anova(model_glm_mce, model_glm_mce_reduced, test = "Chisq")  # NS
+## Comparing the models 
+anova(model_glm_mce, model_glm_mce_subtests, test = "Chisq")  
 
 
-#With ptau
-model_glm_mce_ptau <- glm(AD_clinical_status ~ scale(log_ptau217_raw) + scale(rudas_total) + scale(rpt_learning) + scale(rpt_recall) + scale(rpt_recognition) + scale(crt) + scale(supermarket_fluency) + scale(age) + scale(education), data = d1_mce, family = binomial())
-summary(model_glm_mce_ptau) #AIC 115.73
-confint(model_glm_mce_ptau)
-pR2(model_glm_mce_ptau) #McFadden .548
-print(cbind(exp(model_glm_mce_ptau$coefficients), exp(confint(model_glm_mce_ptau))))
+#Adding p-tau to the models above
+## MCE-model +ptau
+model_glm_mce_mce_ptau <- glm(AD_clinical_status ~ scale(log_ptau217_raw) + scale(mce_total) + scale(age) + scale(education), data = d1_mce, family = binomial())
+summary(model_glm_mce_mce_ptau) 
+confint(model_glm_mce_mce_ptau)
+pR2(model_glm_mce_mce_ptau) 
+print(cbind(exp(model_glm_mce_mce_ptau$coefficients), exp(confint(model_glm_mce_mce_ptau))))
 
-model_glm_mce_reduced_ptau <- glm(AD_clinical_status ~ scale(log_ptau217_raw) + scale(rpt_recall) + scale(age) + scale(education), data = d1_mce, family = binomial())
-summary(model_glm_mce_reduced_ptau) #AIC 176.06
-confint(model_glm_mce_reduced_ptau)
-pR2(model_glm_mce_reduced_ptau) #McFadden .271
-print(cbind(exp(model_glm_mce_reduced_ptau$coefficients), exp(confint(model_glm_mce_reduced_ptau))))
+## Comparing the models (obs difference in complexity why a voung non-nested comparison is made)
+vuong(model_glm_mce_subtests, model_glm_mce_mce_ptau)
+
+## Subtests model + ptau
+model_glm_mce_subtests_ptau <- glm(AD_clinical_status ~ scale(log_ptau217_raw) + scale(rudas_total) + scale(rpt_learning) + scale(rpt_recall) + scale(rpt_recognition) + scale(crt) + scale(supermarket_fluency) + scale(age) + scale(education), data = d1_mce, family = binomial())
+summary(model_glm_mce_subtests_ptau) 
+confint(model_glm_mce_subtests_ptau)
+pR2(model_glm_mce_subtests_ptau) 
+print(cbind(exp(model_glm_mce_subtests_ptau$coefficients), exp(confint(model_glm_mce_subtests_ptau))))
+
+## Comparing the models
+anova(model_glm_mce_mce_ptau, model_glm_mce_subtests_ptau, test = "Chisq")  
 ```
 
 
@@ -448,28 +350,28 @@ ctrl_clinical <- trainControl(
                      summaryFunction=twoClassSummary, 
                      classProbs=TRUE,
                      savePredictions = TRUE)
-model_glm_k_fold_mce_only <- train(AD_clinical_status ~ rudas_total + rpt_recall + rpt_learning + rpt_recognition + crt + supermarket_fluency + age + education,
+model_glm_k_fold_mce_only <- train(AD_clinical_status ~ mce_total + age + education,
                data = d1_mce_k_fold, 
                method = "glm", 
                family = binomial(), 
                metric = "ROC",
                trControl = ctrl_clinical,
                preProcess = c("center", "scale"))
-model_glm_k_fold_subtests <- train(AD_clinical_status ~ rpt_recall +age + education,
+model_glm_k_fold_subtests <- train(AD_clinical_status ~ rudas_total + rpt_recall + rpt_learning + rpt_recognition + crt + supermarket_fluency + age + education,
                data = d1_mce_k_fold, 
                method = "glm", 
                family = binomial(), 
                metric = "ROC",
                trControl = ctrl_clinical,
                preProcess = c("center", "scale"))
-model_glm_k_fold_mce_ptau <- train(AD_clinical_status ~ raw_Ptau217_Lilly + rudas_total + rpt_recall + rpt_learning + rpt_recognition + crt + supermarket_fluency + age + education,
+model_glm_k_fold_mce_ptau <- train(AD_clinical_status ~ raw_Ptau217_Lilly + mce_total + age + education,
                data = d1_mce_k_fold, 
                method = "glm", 
                family = binomial(), 
                metric = "ROC",
                trControl = ctrl_clinical,
                 preProcess = c("center", "scale"))
-model_glm_k_fold_subtests_ptau <- train(AD_clinical_status ~ raw_Ptau217_Lilly + rpt_recall + age + education,
+model_glm_k_fold_subtests_ptau <- train(AD_clinical_status ~ raw_Ptau217_Lilly + rudas_total + rpt_recall + rpt_learning + rpt_recognition + crt + supermarket_fluency + age + education,
                data = d1_mce_k_fold, 
                method = "glm", 
                family = binomial(), 
@@ -478,10 +380,10 @@ model_glm_k_fold_subtests_ptau <- train(AD_clinical_status ~ raw_Ptau217_Lilly +
                preProcess = c("center", "scale"))
 
 
-print(model_glm_k_fold_mce_only,showSD=T)        #817, sen 898, spec: 460
-print(model_glm_k_fold_subtests,showSD=T)        #832, sen 896, spec: 455
-print(model_glm_k_fold_mce_ptau,showSD=T)        #925, sen 916, spec: 682
-print(model_glm_k_fold_subtests_ptau,showSD=T)   #921, sen 928, spec: 644
+print(model_glm_k_fold_mce_only,showSD=T)      
+print(model_glm_k_fold_subtests,showSD=T)        
+print(model_glm_k_fold_mce_ptau,showSD=T)       
+print(model_glm_k_fold_subtests_ptau,showSD=T)  
 
 
 
@@ -505,10 +407,10 @@ roc_object_k_fold_subtests_ptau <- roc(
 
 
 #
-roc.test(roc_object_k_fold_mce_only, roc_object_k_fold_subtests, method = "delong") #NS
+roc.test(roc_object_k_fold_mce_only, roc_object_k_fold_subtests, method = "delong")
 
-roc.test(roc_object_k_fold_mce_only, roc_object_k_fold_mce_ptau, method = "delong") #sig = ptau improves accuracy
-roc.test(roc_object_k_fold_subtests, roc_object_k_fold_subtests_ptau, method = "delong") #sig
+roc.test(roc_object_k_fold_mce_only, roc_object_k_fold_mce_ptau, method = "delong") 
+roc.test(roc_object_k_fold_subtests, roc_object_k_fold_subtests_ptau, method = "delong") 
 
 
 ##############################################################################
@@ -558,13 +460,6 @@ extract_ppv_npv <- function(cv_model) {
 
 
 ##############################################################################
-
-
-library(caret)
-library(pROC)
-library(dplyr)
-library(ggplot2)
-
 results_mce <- model_glm_k_fold_mce_only$results
 results_subtests <- model_glm_k_fold_subtests$results
 results_combined <- model_glm_k_fold_mce_ptau$results
@@ -617,7 +512,7 @@ ggplot(df_together, aes(x = Mean, y = Measure, color = Model)) +
   scale_x_continuous(limits = c(0.0, 1.0), name = "") +
   scale_y_discrete(limits = c("NPV", "PPV", "Accuracy", "Specificity", "Sensitivity", "AUC"), labels = c("NPV", "PPV", "Accuracy", "Specificity", "Sensitivity", "AUC")) +
   scale_color_manual(values = c("#999999", "#56B4E9", "#E69F00", "#009E73"), 
-                     labels = c("Base model", "RPT model", "Base model w. p-tau217", "RPT model w. p-tau217")) +
+                     labels = c("MCE model", "Subtests model", "MCE model w. p-tau217", "Subtests model w. p-tau217")) +
   labs(title = "", color = NULL) +
   theme_minimal() +
   theme(axis.title.y = element_blank(), legend.position = "bottom",
@@ -666,7 +561,7 @@ results_df <- data.frame(Model = names(results_list), results_df)
 print(results_df)
 ```
 
-#**Supplementary Table 1**
+#**Supplementary Table 1** - N by country
 ```{r}
 Supplementary_Table_1 <-
   tbl_summary(
@@ -675,21 +570,21 @@ Supplementary_Table_1 <-
     label = list(
       country_of_origin ~ "Country of birth"
     ), 
-    missing = "no" # don't list missing data separately
+    missing = "no" 
   ) |> 
-  modify_header(label = "") |> # update the column header
+  modify_header(label = "") |> 
   bold_labels()
 
 Supplementary_Table_1
 ```
 
-#Supplementary Table 3 - descriptives by memory clinic
+# **Supplementary Table 2** - Descriptives by memory clinic
 ```{r}
 Center_table <-
   tbl_summary(
     d1_mce,
     include = c(age, sex, education, cognitive_status, dementia_type, raw_Ptau217_Lilly, mce_total, rudas_total, rpt_learning, rpt_recall, rpt_recognition, supermarket_fluency, crt),
-    by = Center, # split table by group
+    by = Center, 
     label = list(
       age ~ "Age, years",
       sex ~ "Female sex (%)",
@@ -712,16 +607,16 @@ Center_table <-
       all_continuous() ~ 1,
       all_categorical() ~ c(0, 1)
     ),
-    missing = "no" # don't list missing data separately
+    missing = "no" 
   ) |> 
-  add_p() |> # test for a difference between groups
-  modify_header(label = "") |> # update the column header
+  add_p() |> 
+  modify_header(label = "") |> 
   bold_labels()
 
 Center_table
 ```
 
-#Supplementary Table 4 - reporting for each fold
+# **Supplementary Table 3** - AUCs for each fold
 ```{r}
 model_glm_k_fold_mce_only$resample$ROC
 model_glm_k_fold_subtests$resample$ROC
@@ -738,28 +633,28 @@ d1_mce_ADvsnonad <- subset(d1_mce_ADvsnonad, dementia_AD_non_AD!= "Unknown")
 d1_mce_ADvsnonad$AD_clinical_status <- droplevels(d1_mce_ADvsnonad$AD_clinical_status)
 
 set.seed(123)
-model_glm_ADvsnonad_mce <- train(AD_clinical_status ~ rudas_total + rpt_recall + rpt_learning + rpt_recognition + crt + supermarket_fluency + age + education,
+model_glm_ADvsnonad_mce <- train(AD_clinical_status ~ mce_total + age + education,
                data = d1_mce_ADvsnonad, 
                method = "glm", 
                family = binomial(), 
                metric = "ROC",
                trControl = ctrl_clinical,
                preProcess= c("center", "scale"))
-model_glm_ADvsnonad_subtests <- train(AD_clinical_status ~ rpt_recall + age + education,
+model_glm_ADvsnonad_subtests <- train(AD_clinical_status ~ rudas_total + rpt_recall + rpt_learning + rpt_recognition + crt + supermarket_fluency + age + education,
                data = d1_mce_ADvsnonad, 
                method = "glm", 
                family = binomial(), 
                metric = "ROC",
                trControl = ctrl_clinical,
                preProcess = c("center", "scale"))
-model_glm_ADvsnonad_mce_ptau <- train(AD_clinical_status ~ raw_Ptau217_Lilly + rudas_total +rpt_recall + rpt_learning + rpt_recognition + crt + supermarket_fluency + age + education,
+model_glm_ADvsnonad_mce_ptau <- train(AD_clinical_status ~ raw_Ptau217_Lilly + mce_total + age + education,
                data = d1_mce_ADvsnonad, 
                method = "glm", 
                family = binomial(), 
                metric = "ROC",
                trControl = ctrl_clinical,
                preProcess= c("center", "scale"))
-model_glm_ADvsnonad_subtests_ptau <- train(AD_clinical_status ~ raw_Ptau217_Lilly + rpt_recall + age + education,
+model_glm_ADvsnonad_subtests_ptau <- train(AD_clinical_status ~ raw_Ptau217_Lilly + rudas_total + rpt_recall + rpt_learning + rpt_recognition + crt + supermarket_fluency + age + education,
                data = d1_mce_ADvsnonad, 
                method = "glm", 
                family = binomial(), 
@@ -769,10 +664,10 @@ model_glm_ADvsnonad_subtests_ptau <- train(AD_clinical_status ~ raw_Ptau217_Lill
 
 
 
-print(model_glm_ADvsnonad_mce,showSD=T)            #676
-print(model_glm_ADvsnonad_subtests,showSD=T)       #680
-print(model_glm_ADvsnonad_mce_ptau,showSD=T)       #861
-print(model_glm_ADvsnonad_subtests_ptau,showSD=T)  #875
+print(model_glm_ADvsnonad_mce,showSD=T)           
+print(model_glm_ADvsnonad_subtests,showSD=T)      
+print(model_glm_ADvsnonad_mce_ptau,showSD=T)       
+print(model_glm_ADvsnonad_subtests_ptau,showSD=T)  
 
 
 roc_object_k_fold_ADvsnonad_mce <- roc(
@@ -792,16 +687,14 @@ roc_object_k_fold_ADvsnonad_subtests_ptau <- roc(
                  predictor = model_glm_ADvsnonad_subtests_ptau$pred$CLI_AD_positive,
                  levels = rev(levels(model_glm_ADvsnonad_subtests_ptau$pred$obs)))
 
-roc.test(roc_object_k_fold_ADvsnonad_mce, roc_object_k_fold_ADvsnonad_subtests, method = "delong")            #rpt equally good as all tests
+roc.test(roc_object_k_fold_ADvsnonad_mce, roc_object_k_fold_ADvsnonad_subtests, method = "delong")            
 
-roc.test(roc_object_k_fold_ADvsnonad_mce, roc_object_k_fold_ADvsnonad_mce_ptau, method = "delong")            #mce+ptau better than mce alone
-roc.test(roc_object_k_fold_ADvsnonad_subtests, roc_object_k_fold_ADvsnonad_subtests_ptau, method = "delong")  #NS
+roc.test(roc_object_k_fold_ADvsnonad_mce, roc_object_k_fold_ADvsnonad_mce_ptau, method = "delong")            
+roc.test(roc_object_k_fold_ADvsnonad_subtests, roc_object_k_fold_ADvsnonad_subtests_ptau, method = "delong")  
 
 
-library(caret)
-library(pROC)
-library(dplyr)
-library(ggplot2)
+
+
 model_glm_k_fold_mce_npv_ppv <- extract_ppv_npv(model_glm_ADvsnonad_mce)
 model_glm_k_fold_subtests_npv_ppv <- extract_ppv_npv(model_glm_ADvsnonad_subtests)
 model_glm_k_fold_mce_ptau_npv_ppv <- extract_ppv_npv(model_glm_ADvsnonad_mce_ptau)
@@ -854,7 +747,7 @@ ggplot(df_together, aes(x = Mean, y = Measure, color = Model)) +
   scale_x_continuous(limits = c(0.0, 1.0), name = "") +
   scale_y_discrete(limits = c("NPV", "PPV", "Accuracy", "Specificity", "Sensitivity", "AUC"), labels = c("NPV", "PPV", "Accuracy", "Specificity", "Sensitivity", "AUC")) +
   scale_color_manual(values = c("#999999", "#56B4E9", "#E69F00", "#009E73"), 
-                     labels = c("Base model", "RPT model", "Base model w. p-tau217", "RPT model w. p-tau217")) +
+                     labels = c("MCE model", "Subtests model", "MCE model w. p-tau217", "Subtests model w. p-tau217")) +
   labs(title = "", color = NULL) +
   theme_minimal() +
   theme(axis.title.y = element_blank(), legend.position = "bottom",
@@ -900,619 +793,62 @@ d1_mce_csf_1$norm_high_ptau217_cutoff <- fct_recode(d1_mce_csf_1$norm_high_ptau2
 
 chisq.test(d1_mce_csf_1$AD_biomarker_status, d1_mce_csf_1$norm_high_ptau217_cutoff)
 
-confusionMatrix(d1_mce_csf_1$norm_high_ptau217_cutoff, d1_mce_csf_1$AD_biomarker_status, positive = "BIO_AD_Positive") 
+confusionMatrix(d1_mce_csf_1$norm_high_ptau217_cutoff, d1_mce_csf_1$AD_biomarker_status, positive = "BIO_AD_Positive")
 ```
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-# DELETED ANALYSES
+#For AAIC presentation
 ```{r}
-ggplot(d1_mce_csf, aes(AD_biomarker_status, Norm_High_ptau217_Lilly)) +
-  geom_boxplot() +
-  geom_jitter()
+d1_mce$dementia_AD_non_AD <- factor(
+  d1_mce$dementia_AD_non_AD,
+  levels = c("AD_and_mixed", "Non_AD", "Non_neurological", "Unknown")  # adjust these to your actual values
+)
+
+ggplot(d1_mce, aes(dementia_AD_non_AD, age)) +
+  geom_boxplot(fill = "grey90") +
+  geom_jitter(aes(color=dementia_AD_non_AD),alpha = 0.5, size = 2, position = position_jitter(width = 0.2, height = 0.2)) +
+  scale_color_manual(
+    values = c("AD_and_mixed" = "#56B4E9", 
+               "Non_AD" = "#E69F00", 
+               "Non_neurological" = "#009E73",
+               "Unknown" = "grey54"))+
+    theme_classic()
+
 ggplot(d1_mce, aes(dementia_AD_non_AD, Norm_High_ptau217_Lilly)) +
-  geom_boxplot() +
-  geom_jitter()
-
-#Youden attempt
-#############################################################################################################################################
-library(pROC)
-library(caret)
-set.seed(123)
-ctrl_clinical <- trainControl(
-                     method="repeatedcv", 
-                     number = 5, 
-                     repeats = 10, 
-                     summaryFunction=twoClassSummary, 
-                     classProbs=TRUE,
-                     savePredictions = 'final')
-
-model_glm_k_fold_subtests <- train(AD_clinical_status ~ rpt_recall +age + education,
-               data = d1_mce_k_fold, 
-               method = "glm", 
-               family = binomial(), 
-               metric = "ROC",
-               trControl = ctrl_clinical,
-               preProcess = c("center", "scale"))
-
-preds <- model_glm_k_fold_subtests$pred
-roc_obj <- roc(preds$obs, preds$CLI_AD_positive)
-coords(roc_obj, "best", best.method = "youden", ret = "all")
-
-
-
-
-
-
-extract_cv_metrics_with_youden(model_glm_k_fold_subtests)
-
-
-extract_cv_metrics_with_youden <- function(cv_model) {
-  library(pROC)
-  library(caret)
-  
-  # Get predictions
-  resampled_results <- cv_model$pred
-  resampled_results$obs <- factor(resampled_results$obs, levels = c("CLI_AD_negative", "CLI_AD_positive"))
-  
-  # Initialize metric storage
-  ppv_values <- c()
-  npv_values <- c()
-  acc_values <- c()
-  sensitivity_values <- c()
-  specificity_values <- c()
-  youden_values <- c()
-  auc_values <- c()
-  
-  # Loop over resamples
-  for (resample in unique(resampled_results$Resample)) {
-    subset_data <- resampled_results[resampled_results$Resample == resample, ]
-    
-    # Ensure no missing data
-    if (nrow(subset_data) == 0) next
-    
-    # ROC and Youden
-    roc_obj <- roc(subset_data$obs, subset_data$positive)
-    youden_coords <- coords(roc_obj, "best", best.method = "youden", transpose = TRUE)
-    threshold <- youden_coords["threshold"]
-    
-    # Classify using Youden threshold
-    predicted_class <- ifelse(subset_data$positive >= threshold, "CLI_AD_positive", "CLI_AD_negative")
-    predicted_class <- factor(predicted_class, levels = levels(subset_data$obs))
-    
-    # Confusion matrix
-    cm <- confusionMatrix(predicted_class, subset_data$obs, positive = "CLI_AD_positive")
-    
-    # Store metrics
-    ppv_values <- c(ppv_values, cm$byClass["Pos Pred Value"])
-    npv_values <- c(npv_values, cm$byClass["Neg Pred Value"])
-    acc_values <- c(acc_values, cm$overall["Accuracy"])
-    sensitivity_values <- c(sensitivity_values, cm$byClass["Sensitivity"])
-    specificity_values <- c(specificity_values, cm$byClass["Specificity"])
-    youden_values <- c(youden_values, youden_coords["sensitivity"] + youden_coords["specificity"] - 1)
-    auc_values <- c(auc_values, as.numeric(auc(roc_obj)))
-  }
-  
-  # Return all means and SDs
-  return(list(
-    PPV_Mean = mean(ppv_values, na.rm = TRUE),
-    PPV_SD = sd(ppv_values, na.rm = TRUE),
-    NPV_Mean = mean(npv_values, na.rm = TRUE),
-    NPV_SD = sd(npv_values, na.rm = TRUE),
-    Acc_Mean = mean(acc_values, na.rm = TRUE),
-    Acc_SD = sd(acc_values, na.rm = TRUE),
-    Sensitivity_Mean = mean(sensitivity_values, na.rm = TRUE),
-    Sensitivity_SD = sd(sensitivity_values, na.rm = TRUE),
-    Specificity_Mean = mean(specificity_values, na.rm = TRUE),
-    Specificity_SD = sd(specificity_values, na.rm = TRUE),
-    Youden_Mean = mean(youden_values, na.rm = TRUE),
-    Youden_SD = sd(youden_values, na.rm = TRUE),
-    AUC_Mean = mean(auc_values, na.rm = TRUE),
-    AUC_SD = sd(auc_values, na.rm = TRUE)
-  ))
-}
-
-
-
-
-```
-
-#AD vs. SCD/Affective/somatic
-```{r}
-d1_mce_ADvsnonneuro <- subset(d1_mce, mce_total > 0)
-d1_mce_ADvsnonneuro <- subset(d1_mce_ADvsnonneuro, education!= "NA")
-d1_mce_ADvsnonneuro <- subset(d1_mce_ADvsnonneuro, dementia_AD_non_AD!= "Non_AD")
-d1_mce_ADvsnonneuro <- subset(d1_mce_ADvsnonneuro, dementia_AD_non_AD!= "Unknown")
-d1_mce_ADvsnonneuro$AD_clinical_status <- droplevels(d1_mce_ADvsnonneuro$AD_clinical_status)
-
-set.seed(123)
-model_glm_ADvsnonneuro_mce <- train(AD_clinical_status ~ rpt_recall + rpt_learning + rpt_recognition + crt + supermarket_fluency + age + education,
-               data = d1_mce_ADvsnonneuro, 
-               method = "glm", 
-               family = binomial(), 
-               metric = "ROC",
-               trControl = ctrl_clinical,
-               preProcess= c("center", "scale"))
-model_glm_ADvsnonneuro_subtests <- train(AD_clinical_status ~ rpt_recall + age + education,
-               data = d1_mce_ADvsnonneuro, 
-               method = "glm", 
-               family = binomial(), 
-               metric = "ROC",
-               trControl = ctrl_clinical,
-               preProcess = c("center", "scale"))
-model_glm_ADvsnonneuro_mce_ptau <- train(AD_clinical_status ~ raw_Ptau217_Lilly + rpt_recall + rpt_learning + rpt_recognition + crt + supermarket_fluency + age + education,
-               data = d1_mce_ADvsnonneuro, 
-               method = "glm", 
-               family = binomial(), 
-               metric = "ROC",
-               trControl = ctrl_clinical,
-               preProcess= c("center", "scale"))
-model_glm_ADvsnonneuro_subtests_ptau <- train(AD_clinical_status ~ raw_Ptau217_Lilly + rpt_recall + age + education,
-               data = d1_mce_ADvsnonneuro, 
-               method = "glm", 
-               family = binomial(), 
-               metric = "ROC",
-               trControl = ctrl_clinical,
-               preProcess = c("center", "scale"))
-
-
-print(model_glm_ADvsnonneuro_mce,showSD=T)            #935
-print(model_glm_ADvsnonneuro_subtests,showSD=T)       #926
-print(model_glm_ADvsnonneuro_mce_ptau,showSD=T)       #958
-print(model_glm_ADvsnonneuro_subtests_ptau,showSD=T)  #964
-
-
-roc_object_k_fold_ADvsnonneuro_mce <- roc(
-                 response = model_glm_ADvsnonneuro_mce$pred$obs, 
-                 predictor = model_glm_ADvsnonneuro_mce$pred$CLI_AD_positive,
-                 levels = rev(levels(model_glm_ADvsnonneuro_mce$pred$obs)))
-roc_object_k_fold_ADvsnonneuro_subtests <- roc(
-                 response = model_glm_ADvsnonneuro_subtests$pred$obs, 
-                 predictor = model_glm_ADvsnonneuro_subtests$pred$CLI_AD_positive,
-                 levels = rev(levels(model_glm_ADvsnonneuro_subtests$pred$obs)))
-roc_object_k_fold_ADvsnonneuro_mce_ptau <- roc(
-                 response = model_glm_ADvsnonneuro_mce_ptau$pred$obs, 
-                 predictor = model_glm_ADvsnonneuro_mce_ptau$pred$CLI_AD_positive,
-                 levels = rev(levels(model_glm_ADvsnonneuro_mce_ptau$pred$obs)))
-roc_object_k_fold_ADvsnonneuro_subtests_ptau <- roc(
-                 response = model_glm_ADvsnonneuro_subtests_ptau$pred$obs, 
-                 predictor = model_glm_ADvsnonneuro_subtests_ptau$pred$CLI_AD_positive,
-                 levels = rev(levels(model_glm_ADvsnonneuro_subtests_ptau$pred$obs)))
-
-roc.test(roc_object_k_fold_ADvsnonneuro_mce, roc_object_k_fold_ADvsnonneuro_subtests, method = "delong")            #rpt equally good as all tests
-
-roc.test(roc_object_k_fold_ADvsnonneuro_mce, roc_object_k_fold_ADvsnonneuro_mce_ptau, method = "delong")            #mce+ptau better than mce alone
-roc.test(roc_object_k_fold_ADvsnonneuro_subtests, roc_object_k_fold_ADvsnonneuro_subtests_ptau, method = "delong")  #subtest is better with ptau217
-
-
-
-library(caret)
-library(pROC)
-library(dplyr)
-library(ggplot2)
-
-model_glm_k_fold_mce_npv_ppv <- extract_ppv_npv(model_glm_ADvsnonneuro_mce)
-model_glm_k_fold_subtests_npv_ppv <- extract_ppv_npv(model_glm_ADvsnonneuro_subtests)
-model_glm_k_fold_mce_ptau_npv_ppv <- extract_ppv_npv(model_glm_ADvsnonneuro_mce_ptau)
-model_glm_k_fold_subtests_ptau_npv_ppv <- extract_ppv_npv(model_glm_ADvsnonneuro_subtests_ptau)
-
-results_mce <- model_glm_ADvsnonneuro_mce$results
-results_subtests <- model_glm_ADvsnonneuro_subtests$results
-results_combined <- model_glm_ADvsnonneuro_mce_ptau$results
-results_combined_subtests <- model_glm_ADvsnonneuro_subtests_ptau$results
-
-df_mce <- data.frame(
-  Measure = c("AUC", "Sensitivity", "Specificity", "PPV", "NPV", "Accuracy"),
-  Mean = c(results_mce$ROC, results_mce$Sens, results_mce$Spec, model_glm_k_fold_mce_npv_ppv$PPV_Mean, model_glm_k_fold_mce_npv_ppv$NPV_Mean, model_glm_k_fold_mce_npv_ppv$Acc_Mean),
-  SD = c(results_mce$ROCSD, results_mce$SensSD, results_mce$SpecSD, model_glm_k_fold_mce_npv_ppv$PPV_SD, model_glm_k_fold_mce_npv_ppv$NPV_SD, model_glm_k_fold_mce_npv_ppv$Acc_SD),
-  Model = "MCE model"
-)
-df_subtests <- data.frame(
-  Measure = c("AUC", "Sensitivity", "Specificity", "PPV", "NPV", "Accuracy"),
-  Mean = c(results_subtests$ROC, results_subtests$Sens, results_subtests$Spec, model_glm_k_fold_subtests_npv_ppv$PPV_Mean, model_glm_k_fold_subtests_npv_ppv$NPV_Mean, model_glm_k_fold_subtests_npv_ppv$Acc_Mean),
-  SD = c(results_subtests$ROCSD, results_subtests$SensSD, results_subtests$SpecSD, model_glm_k_fold_subtests_npv_ppv$PPV_SD, model_glm_k_fold_subtests_npv_ppv$NPV_SD, model_glm_k_fold_subtests_npv_ppv$Acc_SD),
-  Model = "Subtests model"
-)
-df_combined <- data.frame(
-  Measure = c("AUC", "Sensitivity", "Specificity", "PPV", "NPV", "Accuracy"),
-  Mean = c(results_combined$ROC, results_combined$Sens, results_combined$Spec, model_glm_k_fold_mce_ptau_npv_ppv$PPV_Mean, model_glm_k_fold_mce_ptau_npv_ppv$NPV_Mean, model_glm_k_fold_mce_ptau_npv_ppv$Acc_Mean),
-  SD = c(results_combined$ROCSD, results_combined$SensSD, results_combined$SpecSD, model_glm_k_fold_mce_ptau_npv_ppv$PPV_SD, model_glm_k_fold_mce_ptau_npv_ppv$NPV_SD, model_glm_k_fold_mce_ptau_npv_ppv$Acc_SD),
-  Model = "MCE + ptau217 model"
-)
-df_combined_subtests <- data.frame(
-  Measure = c("AUC", "Sensitivity", "Specificity", "PPV", "NPV", "Accuracy"),
-  Mean = c(results_combined_subtests$ROC, results_combined_subtests$Sens, results_combined_subtests$Spec, model_glm_k_fold_subtests_ptau_npv_ppv$PPV_Mean, model_glm_k_fold_subtests_ptau_npv_ppv$NPV_Mean, model_glm_k_fold_subtests_ptau_npv_ppv$Acc_Mean),
-  SD = c(results_combined_subtests$ROCSD, results_combined_subtests$SensSD, results_combined_subtests$SpecSD, model_glm_k_fold_subtests_ptau_npv_ppv$PPV_SD, model_glm_k_fold_subtests_ptau_npv_ppv$NPV_SD, model_glm_k_fold_subtests_ptau_npv_ppv$Acc_SD),
-  Model = "Subtests + ptau model"
-)
-
-df_together <- rbind(df_mce, df_subtests, df_combined, df_combined_subtests)
-
-df_together$Lower <- df_together$Mean - df_together$SD
-df_together$Upper <- df_together$Mean + df_together$SD
-
-df_together[] <- lapply(df_together, function(x) if(is.numeric(x)) pmin(x, 1.0) else x) #one upper sd was above 1 and is limited to = 1
-
-df_together$Measure <- factor(df_together$Measure)
-df_together$Model <- factor(df_together$Model, 
-                            levels = c("MCE model", "Subtests model", 
-                                       "MCE + ptau217 model", "Subtests + ptau model")) 
-
-
-ggplot(df_together, aes(x = Mean, y = Measure, color = Model)) +
-  geom_point(size = 4, position = position_dodge(width = 0.4)) +
-  geom_errorbarh(aes(xmin = Lower, xmax = Upper), height = 0.2, position = position_dodge(width = 0.4)) + 
-  scale_x_continuous(limits = c(0.0, 1.0), name = "") +
-  scale_y_discrete(limits = c("NPV", "PPV", "Accuracy", "Specificity", "Sensitivity", "AUC"), labels = c("NPV", "PPV","Accuracy",  "Specificity", "Sensitivity", "AUC")) +
-  scale_color_manual(values = c("#999999", "#56B4E9", "#E69F00", "#009E73"), 
-                     labels = c("Base model", "RPT model", "Base model w. p-tau217", "RPT model w. p-tau217")) +
-  labs(title = "", color = NULL) +
-  theme_minimal() +
-  theme(axis.title.y = element_blank(), legend.position = "right",
-        axis.text.y = element_text(family = "serif", size = 12, color = "black"),
-        axis.text.x = element_text(family = "serif", size = 10, color = "black"),
-        legend.text = element_text(family = "serif", size = 12, color = "black"))
-
-
-#Likelihoods
-#MCE alone
-results_list$'1MCE model' <-
-Likelihoods(sensitivity = df_together$Mean[df_together$Measure == "Sensitivity" & df_together$Model == "MCE model"], 
-            specificity = df_together$Mean[df_together$Measure == "Specificity" & df_together$Model == "MCE model"])
-#Subtests alone
-results_list$'2Subtests model' <-
-Likelihoods(sensitivity = df_together$Mean[df_together$Measure == "Sensitivity" & df_together$Model == "Subtests model"], 
-            specificity = df_together$Mean[df_together$Measure == "Specificity" & df_together$Model == "Subtests model"])
-#MCE+ptau
-results_list$'3MCE + ptau model' <-
-Likelihoods(sensitivity = df_together$Mean[df_together$Measure == "Sensitivity" & df_together$Model == "MCE + ptau217 model"], 
-            specificity = df_together$Mean[df_together$Measure == "Specificity" & df_together$Model == "MCE + ptau217 model"])
-#Subtests+ptau
-results_list$'4Subtests + ptau model' <-
-Likelihoods(sensitivity = df_together$Mean[df_together$Measure == "Sensitivity" & df_together$Model == "Subtests + ptau model"], 
-            specificity = df_together$Mean[df_together$Measure == "Specificity" & df_together$Model == "Subtests + ptau model"])
-
-results_df <- do.call(rbind, lapply(results_list, function(x) unlist(x)))
-results_df <- data.frame(Model = names(results_list), results_df)
-print(results_df)
-```
-
-# CSF/AB-PET subanalysis
-```{r}
-d1_mce_csf_bio <- subset(d1_mce_csf, education!= "NA")
-
-model_glm_csf_mce <- train(AD_biomarker_status ~ rpt_recall + rpt_learning + rpt_recognition + crt + supermarket_fluency + age + education,
-               data = d1_mce_csf_bio, 
-               method = "glm", 
-               family = binomial(), 
-               metric = "ROC",
-               trControl = ctrl_clinical,
-               preProcess= c("center", "scale"))
-model_glm_csf_subtests <- train(AD_biomarker_status ~ rpt_recall + age + education,
-               data = d1_mce_csf_bio, 
-               method = "glm", 
-               family = binomial(), 
-               metric = "ROC",
-               trControl = ctrl_clinical,
-               preProcess = c("center", "scale"))
-model_glm_csf_mce_ptau <- train(AD_biomarker_status ~ raw_Ptau217_Lilly + rpt_recall + rpt_learning + rpt_recognition + crt + supermarket_fluency + age + education,
-               data = d1_mce_csf_bio, 
-               method = "glm", 
-               family = binomial(), 
-               metric = "ROC",
-               trControl = ctrl_clinical,
-               preProcess= c("center", "scale"))
-model_glm_csf_subtests_ptau <- train(AD_biomarker_status ~ raw_Ptau217_Lilly + rpt_recall + age + education,
-               data = d1_mce_csf_bio, 
-               method = "glm", 
-               family = binomial(), 
-               metric = "ROC",
-               trControl = ctrl_clinical,
-               preProcess = c("center", "scale"))
-
-
-print(model_glm_csf_mce,showSD=T)           #728
-print(model_glm_csf_subtests,showSD=T)      #727
-print(model_glm_csf_mce_ptau,showSD=T)      #876
-print(model_glm_csf_subtests_ptau,showSD=T) #907
-
-
-roc_object_k_fold_csf_mce <- roc(
-                 response = model_glm_csf_mce$pred$obs, 
-                 predictor = model_glm_csf_mce$pred$BIO_AD_Positive,
-                 levels = rev(levels(model_glm_csf_mce$pred$obs)))
-roc_object_k_fold_csf_subtests <- roc(
-                 response = model_glm_csf_subtests$pred$obs, 
-                 predictor = model_glm_csf_subtests$pred$BIO_AD_Positive,
-                 levels = rev(levels(model_glm_csf_subtests$pred$obs)))
-roc_object_k_fold_csf_mce_ptau <- roc(
-                 response = model_glm_csf_mce_ptau$pred$obs, 
-                 predictor = model_glm_csf_mce_ptau$pred$BIO_AD_Positive,
-                 levels = rev(levels(model_glm_csf_mce_ptau$pred$obs)))
-roc_object_k_fold_subtests_ptau <- roc(
-                 response = model_glm_csf_subtests_ptau$pred$obs, 
-                 predictor = model_glm_csf_subtests_ptau$pred$BIO_AD_Positive,
-                 levels = rev(levels(model_glm_csf_subtests_ptau$pred$obs)))
-
-roc.test(roc_object_k_fold_csf_mce, roc_object_k_fold_csf_subtests, method = "delong") #no difference in subtests vs. mce
-
-roc.test(roc_object_k_fold_csf_mce, roc_object_k_fold_csf_mce_ptau, method = "delong") #ptau improves
-roc.test(roc_object_k_fold_csf_subtests, roc_object_k_fold_subtests_ptau, method = "delong") #ptau improves
-
-roc.test(roc_object_k_fold_csf_mce_ptau, roc_object_k_fold_subtests_ptau, method = "delong") #subtest ptau is better than mce ptau
-
-
-
-
-library(caret)
-library(pROC)
-library(dplyr)
-library(ggplot2)
-model_glm_k_fold_mce_npv_ppv <- extract_ppv_npv(model_glm_csf_mce)
-model_glm_k_fold_subtests_npv_ppv <- extract_ppv_npv(model_glm_csf_subtests)
-model_glm_k_fold_mce_ptau_npv_ppv <- extract_ppv_npv(model_glm_csf_mce_ptau)
-model_glm_k_fold_subtests_ptau_npv_ppv <- extract_ppv_npv(model_glm_csf_subtests_ptau)
-
-results_mce <- model_glm_csf_mce$results
-results_subtests <- model_glm_csf_subtests$results
-results_combined <- model_glm_csf_mce_ptau$results
-results_combined_subtests <- model_glm_csf_subtests_ptau$results
-
-df_mce <- data.frame(
-  Measure = c("AUC", "Sensitivity", "Specificity", "PPV", "NPV", "Accuracy"),
-  Mean = c(results_mce$ROC, results_mce$Sens, results_mce$Spec, model_glm_k_fold_mce_npv_ppv$PPV_Mean, model_glm_k_fold_mce_npv_ppv$NPV_Mean, model_glm_k_fold_mce_npv_ppv$Acc_Mean),
-  SD = c(results_mce$ROCSD, results_mce$SensSD, results_mce$SpecSD, model_glm_k_fold_mce_npv_ppv$PPV_SD, model_glm_k_fold_mce_npv_ppv$NPV_SD, model_glm_k_fold_mce_npv_ppv$Acc_SD),
-  Model = "MCE model"
-)
-df_subtests <- data.frame(
-  Measure = c("AUC", "Sensitivity", "Specificity", "PPV", "NPV", "Accuracy"),
-  Mean = c(results_subtests$ROC, results_subtests$Sens, results_subtests$Spec, model_glm_k_fold_subtests_npv_ppv$PPV_Mean, model_glm_k_fold_subtests_npv_ppv$NPV_Mean, model_glm_k_fold_subtests_npv_ppv$Acc_Mean),
-  SD = c(results_subtests$ROCSD, results_subtests$SensSD, results_subtests$SpecSD, model_glm_k_fold_subtests_npv_ppv$PPV_SD, model_glm_k_fold_subtests_npv_ppv$NPV_SD, model_glm_k_fold_subtests_npv_ppv$Acc_SD),
-  Model = "Subtests model"
-)
-df_combined <- data.frame(
-  Measure = c("AUC", "Sensitivity", "Specificity", "PPV", "NPV", "Accuracy"),
-  Mean = c(results_combined$ROC, results_combined$Sens, results_combined$Spec, model_glm_k_fold_mce_ptau_npv_ppv$PPV_Mean, model_glm_k_fold_mce_ptau_npv_ppv$NPV_Mean, model_glm_k_fold_mce_ptau_npv_ppv$Acc_Mean),
-  SD = c(results_combined$ROCSD, results_combined$SensSD, results_combined$SpecSD, model_glm_k_fold_mce_ptau_npv_ppv$PPV_SD, model_glm_k_fold_mce_ptau_npv_ppv$NPV_SD, model_glm_k_fold_mce_ptau_npv_ppv$Acc_SD),
-  Model = "MCE + ptau217 model"
-)
-df_combined_subtests <- data.frame(
-  Measure = c("AUC", "Sensitivity", "Specificity", "PPV", "NPV", "Accuracy"),
-  Mean = c(results_combined_subtests$ROC, results_combined_subtests$Sens, results_combined_subtests$Spec, model_glm_k_fold_subtests_ptau_npv_ppv$PPV_Mean, model_glm_k_fold_subtests_ptau_npv_ppv$NPV_Mean, model_glm_k_fold_subtests_ptau_npv_ppv$Acc_Mean),
-  SD = c(results_combined_subtests$ROCSD, results_combined_subtests$SensSD, results_combined_subtests$SpecSD, model_glm_k_fold_subtests_ptau_npv_ppv$PPV_SD, model_glm_k_fold_subtests_ptau_npv_ppv$NPV_SD, model_glm_k_fold_subtests_ptau_npv_ppv$Acc_SD),
-  Model = "Subtests + ptau model"
-)
-
-df_together <- rbind(df_mce, df_subtests, df_combined, df_combined_subtests)
-
-df_together$Lower <- df_together$Mean - df_together$SD
-df_together$Upper <- df_together$Mean + df_together$SD
-
-df_together[] <- lapply(df_together, function(x) if(is.numeric(x)) pmin(x, 1.0) else x) #one upper sd was above 1 and is limited to = 1
-
-df_together$Measure <- factor(df_together$Measure)
-df_together$Model <- factor(df_together$Model, 
-                            levels = c("MCE model", "Subtests model", 
-                                       "MCE + ptau217 model", "Subtests + ptau model")) 
-
-
-ggplot(df_together, aes(x = Mean, y = Measure, color = Model)) +
-  geom_point(size = 4, position = position_dodge(width = 0.4)) +
-  geom_errorbarh(aes(xmin = Lower, xmax = Upper), height = 0.2, position = position_dodge(width = 0.4)) + 
-  scale_x_continuous(limits = c(0.0, 1.0), name = "") +
-  scale_y_discrete(limits = c("NPV", "PPV","Accuracy",  "Specificity", "Sensitivity", "AUC"), labels = c("NPV", "PPV", "Accuracy","Specificity", "Sensitivity", "AUC")) +
-  scale_color_manual(values = c("#999999", "#56B4E9", "#E69F00", "#009E73"), 
-                     labels = c("Base model", "RPT model", "Base model w. p-tau217", "RPT model w. p-tau217")) +
-  labs(title = "", color = NULL) +
-  theme_minimal() +
-  theme(axis.title.y = element_blank(), legend.position = "right",
-        axis.text.y = element_text(family = "serif", size = 12, color = "black"),
-        axis.text.x = element_text(family = "serif", size = 10, color = "black"),
-        legend.text = element_text(family = "serif", size = 12, color = "black"))
-
-
-
-
-
-#MCE alone
-results_list$'1MCE model' <-
-Likelihoods(sensitivity = df_together$Mean[df_together$Measure == "Sensitivity" & df_together$Model == "MCE model"], 
-            specificity = df_together$Mean[df_together$Measure == "Specificity" & df_together$Model == "MCE model"])
-#Subtests alone
-results_list$'2Subtests model' <-
-Likelihoods(sensitivity = df_together$Mean[df_together$Measure == "Sensitivity" & df_together$Model == "Subtests model"], 
-            specificity = df_together$Mean[df_together$Measure == "Specificity" & df_together$Model == "Subtests model"])
-#MCE+ptau
-results_list$'3MCE + ptau model' <-
-Likelihoods(sensitivity = df_together$Mean[df_together$Measure == "Sensitivity" & df_together$Model == "MCE + ptau217 model"], 
-            specificity = df_together$Mean[df_together$Measure == "Specificity" & df_together$Model == "MCE + ptau217 model"])
-#Subtests+ptau
-results_list$'4Subtests + ptau model' <-
-Likelihoods(sensitivity = df_together$Mean[df_together$Measure == "Sensitivity" & df_together$Model == "Subtests + ptau model"], 
-            specificity = df_together$Mean[df_together$Measure == "Specificity" & df_together$Model == "Subtests + ptau model"])
-
-results_df <- do.call(rbind, lapply(results_list, function(x) unlist(x)))
-results_df <- data.frame(Model = names(results_list), results_df)
-print(results_df)
-```
-
-
-
-
-#AD non-AD attempt with full mce, all subtest mce and plasma alone
-#AD vs. non-AD
-```{r}
-d1_mce_ADvsnonad <- subset(d1_mce, mce_total > 0)
-d1_mce_ADvsnonad <- subset(d1_mce_ADvsnonad, education!= "NA")
-d1_mce_ADvsnonad <- subset(d1_mce_ADvsnonad, dementia_AD_non_AD!= "Non_neurological")
-d1_mce_ADvsnonad <- subset(d1_mce_ADvsnonad, dementia_AD_non_AD!= "Unknown")
-d1_mce_ADvsnonad$AD_clinical_status <- droplevels(d1_mce_ADvsnonad$AD_clinical_status)
-
-set.seed(123)
-model_glm_ADvsnonad_mce <- train(AD_clinical_status ~ mce_total + age + education,
-               data = d1_mce_ADvsnonad, 
-               method = "glm", 
-               family = binomial(), 
-               metric = "ROC",
-               trControl = ctrl_clinical,
-               preProcess= c("center", "scale"))
-model_glm_ADvsnonad_subtests <- train(AD_clinical_status ~ rudas_total + rpt_recall + rpt_learning + rpt_recognition + crt + supermarket_fluency + age + education,
-               data = d1_mce_ADvsnonad, 
-               method = "glm", 
-               family = binomial(), 
-               metric = "ROC",
-               trControl = ctrl_clinical,
-               preProcess = c("center", "scale"))
-model_glm_ADvsnonad_mce_ptau <- train(AD_clinical_status ~ raw_Ptau217_Lilly + mce_total + age + education,
-               data = d1_mce_ADvsnonad, 
-               method = "glm", 
-               family = binomial(), 
-               metric = "ROC",
-               trControl = ctrl_clinical,
-               preProcess= c("center", "scale"))
-model_glm_ADvsnonad_subtests_ptau <- train(AD_clinical_status ~ raw_Ptau217_Lilly + rudas_total +rpt_recall + rpt_learning + rpt_recognition + crt + supermarket_fluency + age + education,
-               data = d1_mce_ADvsnonad, 
-               method = "glm", 
-               family = binomial(), 
-               metric = "ROC",
-               trControl = ctrl_clinical,
-               preProcess = c("center", "scale"))
-
-
-summary(model_glm_ADvsnonad_mce,showSD=T)            #676
-summary(model_glm_ADvsnonad_subtests,showSD=T)       #680
-summary(model_glm_ADvsnonad_mce_ptau,showSD=T)       #861
-summary(model_glm_ADvsnonad_subtests_ptau,showSD=T)  #875
-
-print(model_glm_ADvsnonad_mce,showSD=T)            #676
-print(model_glm_ADvsnonad_subtests,showSD=T)       #680
-print(model_glm_ADvsnonad_mce_ptau,showSD=T)       #861
-print(model_glm_ADvsnonad_subtests_ptau,showSD=T)  #875
-
-
-roc_object_k_fold_ADvsnonad_mce <- roc(
-                 response = model_glm_ADvsnonad_mce$pred$obs, 
-                 predictor = model_glm_ADvsnonad_mce$pred$CLI_AD_positive,
-                 levels = rev(levels(model_glm_ADvsnonad_mce$pred$obs)))
-roc_object_k_fold_ADvsnonad_subtests <- roc(
-                 response = model_glm_ADvsnonad_subtests$pred$obs, 
-                 predictor = model_glm_ADvsnonad_subtests$pred$CLI_AD_positive,
-                 levels = rev(levels(model_glm_ADvsnonad_subtests$pred$obs)))
-roc_object_k_fold_ADvsnonad_mce_ptau <- roc(
-                 response = model_glm_ADvsnonad_mce_ptau$pred$obs, 
-                 predictor = model_glm_ADvsnonad_mce_ptau$pred$CLI_AD_positive,
-                 levels = rev(levels(model_glm_ADvsnonad_mce_ptau$pred$obs)))
-roc_object_k_fold_ADvsnonad_subtests_ptau <- roc(
-                 response = model_glm_ADvsnonad_subtests_ptau$pred$obs, 
-                 predictor = model_glm_ADvsnonad_subtests_ptau$pred$CLI_AD_positive,
-                 levels = rev(levels(model_glm_ADvsnonad_subtests_ptau$pred$obs)))
-
-roc.test(roc_object_k_fold_ADvsnonad_mce, roc_object_k_fold_ADvsnonad_subtests, method = "delong")            #rpt equally good as all tests
-
-roc.test(roc_object_k_fold_ADvsnonad_mce, roc_object_k_fold_ADvsnonad_mce_ptau, method = "delong")            #mce+ptau better than mce alone
-roc.test(roc_object_k_fold_ADvsnonad_subtests, roc_object_k_fold_ADvsnonad_subtests_ptau, method = "delong")  #NS
-
-
-library(caret)
-library(pROC)
-library(dplyr)
-library(ggplot2)
-model_glm_k_fold_mce_npv_ppv <- extract_ppv_npv(model_glm_ADvsnonad_mce)
-model_glm_k_fold_subtests_npv_ppv <- extract_ppv_npv(model_glm_ADvsnonad_subtests)
-model_glm_k_fold_mce_ptau_npv_ppv <- extract_ppv_npv(model_glm_ADvsnonad_mce_ptau)
-model_glm_k_fold_subtests_ptau_npv_ppv <- extract_ppv_npv(model_glm_ADvsnonad_subtests_ptau)
-
-results_mce <- model_glm_ADvsnonad_mce$results
-results_subtests <- model_glm_ADvsnonad_subtests$results
-results_combined <- model_glm_ADvsnonad_mce_ptau$results
-results_combined_subtests <- model_glm_ADvsnonad_subtests_ptau$results
-
-df_mce <- data.frame(
-  Measure = c("AUC", "Sensitivity", "Specificity", "PPV", "NPV", "Accuracy"),
-  Mean = c(results_mce$ROC, results_mce$Sens, results_mce$Spec, model_glm_k_fold_mce_npv_ppv$PPV_Mean, model_glm_k_fold_mce_npv_ppv$NPV_Mean, model_glm_k_fold_mce_npv_ppv$Acc_Mean),
-  SD = c(results_mce$ROCSD, results_mce$SensSD, results_mce$SpecSD, model_glm_k_fold_mce_npv_ppv$PPV_SD, model_glm_k_fold_mce_npv_ppv$NPV_SD, model_glm_k_fold_mce_npv_ppv$Acc_SD),
-  Model = "MCE model"
-)
-df_subtests <- data.frame(
-  Measure = c("AUC", "Sensitivity", "Specificity", "PPV", "NPV", "Accuracy"),
-  Mean = c(results_subtests$ROC, results_subtests$Sens, results_subtests$Spec, model_glm_k_fold_subtests_npv_ppv$PPV_Mean, model_glm_k_fold_subtests_npv_ppv$NPV_Mean, model_glm_k_fold_subtests_npv_ppv$Acc_Mean),
-  SD = c(results_subtests$ROCSD, results_subtests$SensSD, results_subtests$SpecSD, model_glm_k_fold_subtests_npv_ppv$PPV_SD, model_glm_k_fold_subtests_npv_ppv$NPV_SD, model_glm_k_fold_subtests_npv_ppv$Acc_SD),
-  Model = "Subtests model"
-)
-df_combined <- data.frame(
-  Measure = c("AUC", "Sensitivity", "Specificity", "PPV", "NPV", "Accuracy"),
-  Mean = c(results_combined$ROC, results_combined$Sens, results_combined$Spec, model_glm_k_fold_mce_ptau_npv_ppv$PPV_Mean, model_glm_k_fold_mce_ptau_npv_ppv$NPV_Mean, model_glm_k_fold_mce_ptau_npv_ppv$Acc_Mean),
-  SD = c(results_combined$ROCSD, results_combined$SensSD, results_combined$SpecSD, model_glm_k_fold_mce_ptau_npv_ppv$PPV_SD, model_glm_k_fold_mce_ptau_npv_ppv$NPV_SD, model_glm_k_fold_mce_ptau_npv_ppv$Acc_SD),
-  Model = "MCE + ptau217 model"
-)
-df_combined_subtests <- data.frame(
-  Measure = c("AUC", "Sensitivity", "Specificity", "PPV", "NPV", "Accuracy"),
-  Mean = c(results_combined_subtests$ROC, results_combined_subtests$Sens, results_combined_subtests$Spec, model_glm_k_fold_subtests_ptau_npv_ppv$PPV_Mean, model_glm_k_fold_subtests_ptau_npv_ppv$NPV_Mean, model_glm_k_fold_subtests_ptau_npv_ppv$Acc_Mean),
-  SD = c(results_combined_subtests$ROCSD, results_combined_subtests$SensSD, results_combined_subtests$SpecSD, model_glm_k_fold_subtests_ptau_npv_ppv$PPV_SD, model_glm_k_fold_subtests_ptau_npv_ppv$NPV_SD, model_glm_k_fold_subtests_ptau_npv_ppv$Acc_SD),
-  Model = "Subtests + ptau model"
-)
-
-df_together <- rbind(df_mce, df_subtests, df_combined, df_combined_subtests)
-
-df_together$Lower <- df_together$Mean - df_together$SD
-df_together$Upper <- df_together$Mean + df_together$SD
-
-df_together$Measure <- factor(df_together$Measure)
-df_together$Model <- factor(df_together$Model, 
-                            levels = c("MCE model", "Subtests model", 
-                                       "MCE + ptau217 model", "Subtests + ptau model")) 
-
-
-ggplot(df_together, aes(x = Mean, y = Measure, color = Model)) +
-  geom_point(size = 4, position = position_dodge(width = 0.4)) +
-  geom_errorbarh(aes(xmin = Lower, xmax = Upper), height = 0.2, position = position_dodge(width = 0.4)) + 
-  scale_x_continuous(limits = c(0.0, 1.0), name = "") +
-  scale_y_discrete(limits = c("NPV", "PPV", "Accuracy", "Specificity", "Sensitivity", "AUC"), labels = c("NPV", "PPV", "Accuracy", "Specificity", "Sensitivity", "AUC")) +
-  scale_color_manual(values = c("#999999", "#56B4E9", "#E69F00", "#009E73"), 
-                     labels = c("Base model", "RPT model", "Base model w. p-tau217", "RPT model w. p-tau217")) +
-  labs(title = "", color = NULL) +
-  theme_minimal() +
-  theme(axis.title.y = element_blank(), legend.position = "bottom",
-        axis.text.y = element_text(family = "serif", size = 12, color = "black"),
-        axis.text.x = element_text(family = "serif", size = 10, color = "black"),
-        legend.text = element_text(family = "serif", size = 10, color = "black"),
-        text = element_text(family = "serif"))
-
-
-
-
-
-results_list <- list()
-
-#MCE alone
-results_list$'1MCE model' <-
-Likelihoods(sensitivity = df_together$Mean[df_together$Measure == "Sensitivity" & df_together$Model == "MCE model"], 
-            specificity = df_together$Mean[df_together$Measure == "Specificity" & df_together$Model == "MCE model"])
-#Subtests alone
-results_list$'2Subtests model' <-
-Likelihoods(sensitivity = df_together$Mean[df_together$Measure == "Sensitivity" & df_together$Model == "Subtests model"], 
-            specificity = df_together$Mean[df_together$Measure == "Specificity" & df_together$Model == "Subtests model"])
-#MCE+ptau
-results_list$'3MCE + ptau model' <-
-Likelihoods(sensitivity = df_together$Mean[df_together$Measure == "Sensitivity" & df_together$Model == "MCE + ptau217 model"], 
-            specificity = df_together$Mean[df_together$Measure == "Specificity" & df_together$Model == "MCE + ptau217 model"])
-#Subtests+ptau
-results_list$'4Subtests + ptau model' <-
-Likelihoods(sensitivity = df_together$Mean[df_together$Measure == "Sensitivity" & df_together$Model == "Subtests + ptau model"], 
-            specificity = df_together$Mean[df_together$Measure == "Specificity" & df_together$Model == "Subtests + ptau model"])
-
-results_df <- do.call(rbind, lapply(results_list, function(x) unlist(x)))
-results_df <- data.frame(Model = names(results_list), results_df)
-print(results_df)
+  geom_boxplot(fill = "grey90") +
+  geom_jitter(aes(color=dementia_AD_non_AD),alpha = 0.5, size = 2, position = position_jitter(width = 0.2, height = 0.2)) +
+  scale_color_manual(
+    values = c("AD_and_mixed" = "#56B4E9", 
+               "Non_AD" = "#E69F00", 
+               "Non_neurological" = "#009E73",
+               "Unknown" = "grey54"))+
+    theme_classic()
+
+ggplot(d1_mce, aes(dementia_AD_non_AD, mce_total)) +
+  geom_boxplot(fill = "grey90") +
+  geom_jitter(aes(color=dementia_AD_non_AD),alpha = 0.5, size = 2, position = position_jitter(width = 0.2, height = 0.2)) +
+  scale_color_manual(
+    values = c("AD_and_mixed" = "#56B4E9", 
+               "Non_AD" = "#E69F00", 
+               "Non_neurological" = "#009E73",
+               "Unknown" = "grey54"))+
+    theme_classic()
+
+d1_cognitively_intact <- subset(d1, cognitive_status == "SCD")
+d1_long <- d1_cognitively_intact %>%
+  pivot_longer(cols = c(mce_total, ace), 
+               names_to = "Test", 
+               values_to = "Score")
+ggplot(d1_long, aes(x = education, y = Score, color = Test)) +
+  geom_jitter(alpha = 0.4, size = 1.5) +
+  geom_smooth(method = "lm", se = TRUE, size = 1.2) +
+  labs(x = "Education (Years)", y = "Cognitive Test Score", color = "") +
+  scale_y_discrete(labels = c("ACE", "MCE")) +
+  scale_y_continuous(limits = c(20,100), breaks = seq(20,100, by = 10)) +
+  scale_color_manual(values = c("#56B4E9", "#E69F00"), 
+                     labels = c("ACE", "MCE"))+
+  theme_minimal() + 
+  theme(legend.position = "bottom",
+    legend.test = element_text(family = "serif", size = 10),
+    text = element_text(family = "serif"))
 ```
